@@ -2,22 +2,60 @@
 # app.py
 import streamlit as st
 import datetime as dt
+import json
+import csv
+from pathlib import Path
 
-# -------------------------------
+# ---------------------------------
 # CONFIG
-# -------------------------------
+# ---------------------------------
 st.set_page_config(page_title="MedTimer", page_icon="⏰", layout="wide")
 
-# -------------------------------
-# INITIAL STATE
-# -------------------------------
-if "meds" not in st.session_state:
-    # Each item: {"name": str, "time": "HH:MM", "days": ["Mon", ...]}
-    st.session_state.meds = []
+# ---------------------------------
+# FILE PERSISTENCE
+# ---------------------------------
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+MEDS_PATH = DATA_DIR / "meds.json"
+LOG_PATH  = DATA_DIR / "adherence_log.json"  # { "YYYY-MM-DD": {"taken":[keys], "scheduled": int} }
 
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+def load_json(path: Path, default):
+    try:
+        if path.exists():
+            return json.loads(path.read_text())
+    except Exception:
+        pass
+    return default
+
+def save_json(path: Path, obj):
+    try:
+        path.write_text(json.dumps(obj, indent=2))
+    except Exception:
+        # On some hosted environments, writes may be ephemeral—ignore errors
+        pass
+
+# ---------------------------------
+# STATE INIT
+# ---------------------------------
+if "meds" not in st.session_state:
+    # Load medicines from JSON (or start empty)
+    st.session_state.meds = load_json(MEDS_PATH, default=[])
+
+if "adherence_log" not in st.session_state:
+    # Load daily taken history by date
+    st.session_state.adherence_log = load_json(LOG_PATH, default={})
+
+def today_str(now=None):
+    now = now or dt.datetime.now()
+    return now.date().isoformat()
+
+# Keep "taken_today" in sync with today's log so it survives reruns
 if "taken_today" not in st.session_state:
-    # Store taken keys: "YYYY-MM-DD|name|HH:MM"
-    st.session_state.taken_today = set()
+    today_key = today_str()
+    taken_list = st.session_state.adherence_log.get(today_key, {}).get("taken", [])
+    st.session_state.taken_today = set(taken_list)
 
 if "tips_idx" not in st.session_state:
     st.session_state.tips_idx = 0
@@ -25,13 +63,12 @@ if "tips_idx" not in st.session_state:
 TIPS = [
     "Stay hydrated and take meds on time.",
     "Consistency is key—same time every day.",
-    "Celebrate small wins—you’re doing great!"
+    "Celebrate small wins—you’re doing great!",
 ]
-WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# -------------------------------
+# ---------------------------------
 # HELPERS
-# -------------------------------
+# ---------------------------------
 def parse_time(tstr: str):
     """Return datetime.time from 'HH:MM' or None if invalid."""
     try:
@@ -40,31 +77,45 @@ def parse_time(tstr: str):
     except Exception:
         return None
 
-def now_local() -> dt.datetime:
-    return dt.datetime.now()
+def weekday_name(date_obj: dt.date):
+    return WEEKDAYS[date_obj.weekday()]
+
+def schedule_key(date_obj: dt.date, name: str, time_str: str):
+    return f"{date_obj.isoformat()}|{name}|{time_str}"
+
+def scheduled_keys_for_date(date_obj: dt.date):
+    """Return all scheduled dose keys for a given date based on current meds list."""
+    wname = weekday_name(date_obj)
+    keys = []
+    for m in st.session_state.meds:
+        days = m.get("days", WEEKDAYS)
+        if wname not in days:
+            continue
+        t = parse_time(m.get("time",""))
+        if not t:
+            continue
+        keys.append(schedule_key(date_obj, m["name"], m["time"]))
+    return keys
 
 def build_today_schedule(grace_minutes: int = 60):
     """
-    Build today's schedule with status:
-    - upcoming: now < scheduled_dt (or within grace)
-    - taken: key in taken_today
-    - missed: now > scheduled_dt + grace and not taken
+    Build today's schedule with live statuses:
+      - upcoming: now < scheduled_dt (or within grace window)
+      - taken: key in taken_today
+      - missed: now > scheduled_dt + grace and not taken
     """
-    now = now_local()
-    today_name = WEEKDAYS[now.weekday()]
+    now = dt.datetime.now()
+    date_obj = now.date()
     items = []
     for m in st.session_state.meds:
-        days = m.get("days", WEEKDAYS)
-        if today_name not in days:
+        if weekday_name(date_obj) not in m.get("days", WEEKDAYS):
             continue
-
-        t = parse_time(m.get("time", ""))
+        t = parse_time(m.get("time",""))
         if not t:
-            # Skip invalid time entries silently
             continue
 
-        sched_dt = dt.datetime.combine(now.date(), t)
-        key = f"{now.date()}|{m['name']}|{m['time']}"
+        sched_dt = dt.datetime.combine(date_obj, t)
+        key = schedule_key(date_obj, m["name"], m["time"])
 
         if key in st.session_state.taken_today:
             status = "taken"
@@ -78,26 +129,85 @@ def build_today_schedule(grace_minutes: int = 60):
                 status = "upcoming"
 
         items.append({"name": m["name"], "time": t, "status": status, "key": key})
-
-    # Sort by time ascending
     return sorted(items, key=lambda x: x["time"])
 
-def adherence_score():
+def record_today_log():
     """
-    Basic adherence score using today's schedule:
-    taken / scheduled * 100 (if no scheduled, show 100%)
+    Persist today's scheduled count and taken list into adherence_log.json
+    This lets us compute a true 7-day adherence from actual daily logs.
     """
+    date_key = today_str()
     sched = build_today_schedule()
-    total = len(sched)
-    taken = sum(1 for s in sched if s["status"] == "taken")
-    return int((taken / total) * 100) if total else 100
+    taken = list(st.session_state.taken_today)
+    st.session_state.adherence_log[date_key] = {
+        "taken": taken,
+        "scheduled": len(sched)
+    }
+    save_json(LOG_PATH, st.session_state.adherence_log)
 
-# -------------------------------
+def adherence_for_date(date_obj: dt.date):
+    """
+    True adherence for a given date: taken / scheduled * 100
+    If the date hasn't been logged, we infer 'scheduled' from current meds, and 'taken' = 0.
+    """
+    dk = date_obj.isoformat()
+    entry = st.session_state.adherence_log.get(dk)
+    if entry:
+        taken = len(entry.get("taken", []))
+        scheduled = entry.get("scheduled", 0)
+    else:
+        # No log for that day: infer scheduled from meds for that weekday; taken=0
+        scheduled = len(scheduled_keys_for_date(date_obj))
+        taken = 0
+    return int((taken / scheduled) * 100) if scheduled else 100
+
+def adherence_past_7_days():
+    """
+    Aggregate adherence over the last 7 days using the daily log.
+    If some days are missing from the log, we infer scheduled counts from meds and taken=0.
+    """
+    now = dt.datetime.now()
+    total_taken = 0
+    total_sched = 0
+    for i in range(7):
+        d = (now.date() - dt.timedelta(days=i))
+        dk = d.isoformat()
+        entry = st.session_state.adherence_log.get(dk)
+        if entry:
+            total_taken += len(entry.get("taken", []))
+            total_sched += entry.get("scheduled", 0)
+        else:
+            # infer scheduled from meds for that weekday; taken=0
+            total_sched += len(scheduled_keys_for_date(d))
+    return int((total_taken / total_sched) * 100) if total_sched else 100
+
+def weekly_csv_bytes():
+    """
+    Build a CSV (in-memory) for last 7 days: Date, Scheduled, Taken, Adherence%
+    """
+    now = dt.datetime.now()
+    from io import StringIO
+    sio = StringIO()
+    writer = csv.writer(sio)
+    writer.writerow(["Date", "Scheduled", "Taken", "Adherence%"])
+    for i in range(6, -1, -1):
+        d = now.date() - dt.timedelta(days=i)
+        dk = d.isoformat()
+        entry = st.session_state.adherence_log.get(dk, {})
+        scheduled = entry.get("scheduled", len(scheduled_keys_for_date(d)))  # infer if missing
+        taken = len(entry.get("taken", []))
+        adh = int((taken / scheduled) * 100) if scheduled else 100
+        writer.writerow([dk, scheduled, taken, adh])
+    return sio.getvalue().encode("utf-8")
+
+# ---------------------------------
 # UI
-# -------------------------------
+# ---------------------------------
 st.title("⏰ MedTimer – Daily Medicine Companion")
 
-# Layout columns
+# Record today’s log (scheduled count + taken list) so weekly stats are accurate
+record_today_log()
+
 col1, col2 = st.columns([2, 1])
 
 # ---------- LEFT: Checklist ----------
@@ -106,12 +216,7 @@ with col1:
     schedule = build_today_schedule()
 
     for s in schedule:
-        color = {
-            "taken": "#2e7d32",   # green
-            "upcoming": "#f9a825",# yellow
-            "missed": "#c62828"   # red
-        }[s["status"]]
-
+        color = {"taken": "#2e7d32", "upcoming": "#f9a825", "missed": "#c62828"}[s["status"]]
         st.markdown(
             f"""
             <div style="border-left:8px solid {color}; padding:10px; margin:8px 0;
@@ -122,31 +227,31 @@ with col1:
             """,
             unsafe_allow_html=True
         )
-
-        # Unique button key (already unique via s["key"])
         if s["status"] != "taken":
             if st.button(f"Mark taken: {s['name']} @ {s['time'].strftime('%H:%M')}", key=s["key"]):
                 st.session_state.taken_today.add(s["key"])
-                # Stable rerun API
+                record_today_log()  # persist change
                 st.rerun()
 
-# ---------- RIGHT: Score + Tips ----------
+# ---------- RIGHT: Weekly adherence + tips + CSV ----------
 with col2:
     st.subheader("Weekly Adherence")
-    score = adherence_score()
-    st.progress(score/100)
-    st.write(f"**Score:** {score}%")
-
-    # Encouragement (emoji fallback; Turtle graphics are best run locally)
-    if score >= 80:
-        st.success("🎉 Great job!")
-    else:
-        st.info("Keep going—you’ve got this!")
+    weekly_score = adherence_past_7_days()
+    st.progress(weekly_score / 100.0)
+    st.write(f"**Score (last 7 days):** {weekly_score}%")
 
     st.subheader("Tip of the day")
     st.info(TIPS[st.session_state.tips_idx])
     if st.button("Next tip"):
         st.session_state.tips_idx = (st.session_state.tips_idx + 1) % len(TIPS)
+
+    st.subheader("Weekly Report")
+    st.download_button(
+        "⬇️ Download CSV",
+        data=weekly_csv_bytes(),
+        file_name="medtimer_weekly_report.csv",
+        mime="text/csv"
+    )
 
 # ---------- Manage Medicines ----------
 st.divider()
@@ -163,6 +268,7 @@ with st.form("add_med"):
             st.error("Please enter a valid name and time (HH:MM).")
         else:
             st.session_state.meds.append({"name": name.strip(), "time": time_str.strip(), "days": days})
+            save_json(MEDS_PATH, st.session_state.meds)  # persist
             st.success(f"Added {name} at {time_str}")
 
 # Edit/Delete
@@ -177,7 +283,13 @@ for i, m in enumerate(st.session_state.meds):
         if parse_time(new_time):
             st.session_state.meds[i]["time"] = new_time
 
+        # Save changes
+        if st.button("Save changes", key=f"save_{i}"):
+            save_json(MEDS_PATH, st.session_state.meds)
+            st.success("Saved changes.")
+
         # Delete
         if st.button(f"Delete {m['name']}", key=f"del_{i}"):
             st.session_state.meds.pop(i)
+            save_json(MEDS_PATH, st.session_state.meds)
             st.rerun()
