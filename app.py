@@ -1,5 +1,4 @@
-
-# app.py
+# app.py (improved)
 import streamlit as st
 import datetime as dt
 import json
@@ -7,22 +6,22 @@ import csv
 import math
 import wave
 import struct
-import os
 from pathlib import Path
+from uuid import uuid4
+from io import BytesIO, StringIO
 
-# Optional (local only for drawing): standard-library turtle
-# In Streamlit Cloud, this may not open; we guard usage.
+# Turtle optional
 try:
     import turtle
     TURTLE_AVAILABLE = True
 except Exception:
     TURTLE_AVAILABLE = False
 
-# -------------------------------
-# BASIC CONFIG & THEMES (Accessibility)
-# -------------------------------
 st.set_page_config(page_title="MedTimer", page_icon="⏰", layout="wide")
 
+# -------------------------------
+# THEMES
+# -------------------------------
 THEMES = {
     "Light": {
         "bg": "#F8FCFF", "text": "#0D1B2A", "card": "#FFFFFF",
@@ -68,16 +67,16 @@ def inject_css():
         """,
         unsafe_allow_html=True
     )
-
 inject_css()
 
 # -------------------------------
-# PERSISTENCE (JSON in ./data/)
+# PERSISTENCE
 # -------------------------------
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 MEDS_PATH = DATA_DIR / "meds.json"
 LOG_PATH = DATA_DIR / "adherence_log.json"
+TAKEN_PATH = DATA_DIR / "taken.json"  # persist taken keys for dates
 
 WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 
@@ -93,31 +92,38 @@ def save_json(path, obj):
     try:
         Path(path).write_text(json.dumps(obj, indent=2))
     except Exception:
-        # On some hosted envs, writes may be ephemeral—ignore errors.
+        # hosted env may block writes; fail silently but keep app usable
         pass
 
 # -------------------------------
-# INIT STATE
+# INITIAL STATE
 # -------------------------------
 def init_state():
-    if "meds" not in st.session_state:
-        meds = load_json(MEDS_PATH, default=None)
-        if meds is None:
-            st.session_state.meds = [
-                {"name": "Metformin", "time": "08:00", "days": WEEKDAYS, "active": True, "reminder_min": 10},
-                {"name": "Vitamin D", "time": "21:00", "days": WEEKDAYS, "active": True, "reminder_min": 10},
-            ]
-        else:
-            st.session_state.meds = meds
-    if "taken_today" not in st.session_state:
-        st.session_state.taken_today = set()  # "YYYY-MM-DD|name|HH:MM"
-    if "tips_idx" not in st.session_state:
-        st.session_state.tips_idx = 0
-    if "adherence_log" not in st.session_state:
-        st.session_state.adherence_log = load_json(LOG_PATH, default={})
+    # meds: list of dicts with stable 'id'
+    meds = load_json(MEDS_PATH, default=None)
+    if meds is None:
+        st.session_state.meds = [
+            {"id": str(uuid4()), "name": "Metformin", "time": "08:00", "days": WEEKDAYS, "active": True, "reminder_min": 10},
+            {"id": str(uuid4()), "name": "Vitamin D", "time": "21:00", "days": WEEKDAYS, "active": True, "reminder_min": 10},
+        ]
+        save_json(MEDS_PATH, st.session_state.meds)
+    else:
+        st.session_state.meds = meds
+
+    # taken_today persisted as list on disk keyed by date -> list(keys)
+    raw_taken = load_json(TAKEN_PATH, default={})
+    st.session_state.taken_by_date = raw_taken  # dict str(date) -> list of keys
+    today = dt.date.today().isoformat()
+    st.session_state.taken_today = set(st.session_state.taken_by_date.get(today, []))
+
+    st.session_state.adherence_log = load_json(LOG_PATH, default={})
+    st.session_state.tips_idx = st.session_state.get("tips_idx", 0)
 
 init_state()
 
+# -------------------------------
+# TIPS
+# -------------------------------
 TIPS = [
     "Small wins count—stay hydrated and take meds on time.",
     "Set a routine: same place, same time, every day.",
@@ -126,7 +132,7 @@ TIPS = [
 ]
 
 # -------------------------------
-# UTILITIES
+# TIME UTILITIES
 # -------------------------------
 def parse_time(tstr):
     try:
@@ -149,22 +155,18 @@ def combine_today(t: dt.time, now=None):
     now = now or now_local()
     return dt.datetime.combine(now.date(), t)
 
-def schedule_key(date: dt.date, name: str, time_str: str):
-    return f"{date.isoformat()}|{name}|{time_str}"
+def schedule_key(date: dt.date, med_id: str, time_str: str):
+    # deterministic, safe key: date|med_id|time
+    return f"{date.isoformat()}|{med_id}|{time_str}"
 
+# -------------------------------
+# SCHEDULE BUILDING & LOGGING
+# -------------------------------
 def build_today_schedule(meds, now=None, grace_min=60):
-    """
-    Returns list of dicts:
-      {name, time (dt.time), time_str, status, key, reminder_min, scheduled_dt}
-    Status rules:
-      taken: key in taken_today
-      upcoming: now < scheduled_dt (or within grace window after time)
-      missed: now > scheduled_dt + grace
-    """
     now = now or now_local()
     items = []
     for m in meds:
-        if not m.get("active", True): 
+        if not m.get("active", True):
             continue
         if not is_for_today(m.get("days", WEEKDAYS), now):
             continue
@@ -172,7 +174,7 @@ def build_today_schedule(meds, now=None, grace_min=60):
         if not t:
             continue
         sdt = combine_today(t, now)
-        key = schedule_key(now.date(), m["name"], m["time"])
+        key = schedule_key(now.date(), m["id"], m["time"])
         if key in st.session_state.taken_today:
             status = "taken"
         else:
@@ -182,33 +184,44 @@ def build_today_schedule(meds, now=None, grace_min=60):
             elif now > sdt + grace:
                 status = "missed"
             else:
+                # within grace window -> upcoming (can still mark taken)
                 status = "upcoming"
         items.append({
-            "name": m["name"], "time": t, "time_str": m["time"], "status": status,
-            "key": key, "reminder_min": int(m.get("reminder_min", 10)), "scheduled_dt": sdt
+            "id": m["id"],
+            "name": m["name"],
+            "time": t,
+            "time_str": m["time"],
+            "status": status,
+            "key": key,
+            "reminder_min": int(m.get("reminder_min", 10)),
+            "scheduled_dt": sdt
         })
     items.sort(key=lambda x: x["time"])
     return items
 
 def record_daily_log(now=None):
-    """Persist scheduled count and taken keys for today."""
     now = now or now_local()
     date_key = now.date().isoformat()
     sched = build_today_schedule(st.session_state.meds, now)
-    taken = [s["key"] for s in sched if s["key"] in st.session_state.taken_today]
-    st.session_state.adherence_log[date_key] = {"taken": taken, "scheduled": len(sched)}
+    scheduled_count = len(sched)
+    taken_list = list(st.session_state.taken_today)
+    # Persist both adherence log and taken_by_date
+    st.session_state.adherence_log[date_key] = {"taken": taken_list, "scheduled": scheduled_count}
     save_json(LOG_PATH, st.session_state.adherence_log)
+    # persist taken_by_date structure too
+    st.session_state.taken_by_date[date_key] = taken_list
+    save_json(TAKEN_PATH, st.session_state.taken_by_date)
 
 def adherence_for_date(date: dt.date):
     entry = st.session_state.adherence_log.get(date.isoformat())
-    if not entry:
-        # Best-effort approximation if no log
-        dn = dt.datetime.combine(date, dt.datetime.min.time())
-        sched = build_today_schedule(st.session_state.meds, dn)
-        scheduled = len(sched)
-        return 100 if scheduled == 0 else 0
-    taken = len(entry.get("taken", []))
-    scheduled = entry.get("scheduled", 0)
+    if entry is not None:
+        taken = len(entry.get("taken", []))
+        scheduled = entry.get("scheduled", 0)
+        return int((taken / scheduled) * 100) if scheduled else 100
+    # best-effort compute scheduled (no log) and check taken_by_date
+    date_key = date.isoformat()
+    scheduled = len(build_today_schedule(st.session_state.meds, dt.datetime.combine(date, dt.datetime.min.time())))
+    taken = len(st.session_state.taken_by_date.get(date_key, []))
     return int((taken / scheduled) * 100) if scheduled else 100
 
 def adherence_past_7_days(now=None):
@@ -216,20 +229,22 @@ def adherence_past_7_days(now=None):
     total_taken, total_sched = 0, 0
     for i in range(7):
         d = now.date() - dt.timedelta(days=i)
-        entry = st.session_state.adherence_log.get(d.isoformat())
+        date_key = d.isoformat()
+        entry = st.session_state.adherence_log.get(date_key)
         if entry:
             total_taken += len(entry.get("taken", []))
             total_sched += entry.get("scheduled", 0)
         else:
-            # If not logged, we assume scheduled exists but none taken
-            dn = dt.datetime.combine(d, dt.datetime.min.time())
-            total_sched += len(build_today_schedule(st.session_state.meds, dn))
+            # no logged entry - approximate using schedule + recorded taken_by_date
+            scheduled = len(build_today_schedule(st.session_state.meds, dt.datetime.combine(d, dt.datetime.min.time())))
+            total_sched += scheduled
+            total_taken += len(st.session_state.taken_by_date.get(date_key, []))
     return int((total_taken / total_sched) * 100) if total_sched else 100
 
 def current_streak(now=None, threshold=80):
     now = now or now_local()
     streak = 0
-    for i in range(30):  # look back up to 30 days
+    for i in range(30):
         d = now.date() - dt.timedelta(days=i)
         if adherence_for_date(d) >= threshold:
             streak += 1
@@ -238,37 +253,26 @@ def current_streak(now=None, threshold=80):
     return streak
 
 # -------------------------------
-# AUDIO BEEP (basic WAV from stdlib)
+# AUDIO BEEP
 # -------------------------------
 def make_beep(duration_sec=0.5, freq_hz=880, sr=44100, volume=0.4):
-    """
-    Creates a WAV beep in-memory using math+wave+struct (stdlib only).
-    """
     n_samples = int(sr * duration_sec)
-    buf = st.session_state.get("_beep_buf")
-    # Always regenerate to avoid caching artifacts
-    buf = None
-    from io import BytesIO
     buf = BytesIO()
     with wave.open(buf, "wb") as wf:
         wf.setnchannels(1)
-        wf.setsampwidth(2)  # 16-bit PCM
+        wf.setsampwidth(2)
         wf.setframerate(sr)
         for i in range(n_samples):
             t = i / sr
             sample = int(32767 * volume * math.sin(2 * math.pi * freq_hz * t))
             wf.writeframes(struct.pack('<h', sample))
     buf.seek(0)
-    return buf
+    return buf.read()
 
 # -------------------------------
-# TURTLE REWARD (local only)
+# TURTLE (unchanged)
 # -------------------------------
 def draw_turtle_reward(score):
-    """
-    Opens a turtle window and draws a smiley/trophy depending on score.
-    Works locally; likely won't render on Streamlit Cloud.
-    """
     if not TURTLE_AVAILABLE:
         st.warning("Turtle module not available in this environment.")
         return
@@ -276,46 +280,34 @@ def draw_turtle_reward(score):
     wn.title(f"MedTimer Reward — Adherence {score}%")
     t = turtle.Turtle()
     t.speed(0)
-
     if score >= 90:
-        # Simple trophy: base + cup
         t.color("gold"); t.pensize(5)
         t.penup(); t.goto(-50, -100); t.pendown()
         for _ in range(2):
             t.forward(100); t.left(90); t.forward(20); t.left(90)
         t.penup(); t.goto(0, -80); t.pendown()
         t.left(90); t.forward(80); t.right(90)
-        t.circle(50)  # cup
+        t.circle(50)
     elif score >= 80:
-        # Smiley
         t.color("green"); t.pensize(4)
         t.penup(); t.goto(0, -50); t.pendown()
         t.circle(80)
-        # eyes
         for x in (-30, 30):
             t.penup(); t.goto(x, 40); t.pendown()
             t.circle(10)
-        # smile
         t.penup(); t.goto(-40, 10); t.setheading(-60); t.pendown()
-        for _ in range(60):  # arc
+        for _ in range(60):
             t.forward(2); t.left(2)
     else:
-        # Encouragement text
         t.color("red"); t.penup(); t.goto(-100, 0); t.pendown()
         t.write("You’ve got this!\nTry setting reminders.", font=("Arial", 16, "normal"))
-
-    # Keep window open until user closes it
     turtle.done()
 
 # -------------------------------
-# WEEKLY REPORT (CSV via stdlib)
+# CSV REPORT
 # -------------------------------
 def weekly_csv_bytes(now=None):
-    """
-    Build a CSV (in-memory) of last 7 days: Date, Scheduled, Taken, Adherence%.
-    """
     now = now or now_local()
-    from io import StringIO
     s = StringIO()
     writer = csv.writer(s)
     writer.writerow(["Date", "Scheduled", "Taken", "Adherence%"])
@@ -329,27 +321,34 @@ def weekly_csv_bytes(now=None):
     return s.getvalue().encode("utf-8")
 
 # -------------------------------
+# UTILITY: persist taken_today to disk
+# -------------------------------
+def save_taken_today():
+    date_key = dt.date.today().isoformat()
+    st.session_state.taken_by_date[date_key] = list(st.session_state.taken_today)
+    save_json(TAKEN_PATH, st.session_state.taken_by_date)
+    # also update adherence log for today
+    record_daily_log()
+
+# -------------------------------
 # UI
 # -------------------------------
 st.markdown('<div class="big-title">⏰ MedTimer – Daily Medicine Companion</div>', unsafe_allow_html=True)
 
-# Sidebar: Accessibility / Theme
 with st.sidebar:
     st.header("Accessibility")
     st.session_state.theme = st.radio("Theme", list(THEMES.keys()), index=list(THEMES.keys()).index(st.session_state.theme))
     inject_css()
     st.caption("Toggle light / dark / high-contrast for readability.")
 
-# Layout
 left, right = st.columns([2,1])
 
-# ---------- LEFT: Checklist ----------
 with left:
     st.subheader("Today's Checklist")
     now = now_local()
     schedule = build_today_schedule(st.session_state.meds, now)
 
-    # Reminder alerts within per-medicine window
+    # upcoming reminders
     upcoming = []
     for s in schedule:
         minutes_to = int((s["scheduled_dt"] - now).total_seconds() // 60)
@@ -378,22 +377,21 @@ with left:
         c1, c2 = st.columns([1,2])
         with c1:
             if s["status"] != "taken":
-                if st.button("Mark taken", key=s["key"]):
+                # unique button key uses med id + date
+                btn_key = f"mark_{s['key']}"
+                if st.button("Mark taken", key=btn_key):
                     st.session_state.taken_today.add(s["key"])
-                    record_daily_log(now)
+                    save_taken_today()
                     st.experimental_rerun()
         with c2:
             st.caption(f"Reminder: {s['reminder_min']} min before")
 
-# ---------- RIGHT: Score, Reward, Tips, Streak, Report ----------
 with right:
     st.subheader("Weekly Adherence")
     record_daily_log(now)
     score7 = adherence_past_7_days(now)
     st.progress(score7 / 100.0)
     st.write(f"**Score:** {score7}%")
-
-    # Reward (emoji fallback) + Turtle (local)
     if score7 >= 90:
         st.success("🏆 Excellent adherence! (Turtle trophy available locally)")
     elif score7 >= 80:
@@ -410,7 +408,7 @@ with right:
         st.caption("Turtle graphics not available in this environment.")
 
     st.subheader("Streak")
-    st.info(f"Current streak: **{current_streak(now, threshold=80)}** day(s) with ≥80% adherence")
+    st.info(f"Current streak: **{current_streak(now, threshold=80)}** day(s)")
 
     st.subheader("Tip of the day")
     st.info(TIPS[st.session_state.tips_idx])
@@ -434,36 +432,49 @@ with st.form("add_med"):
         if not name or not parse_time(time_str):
             st.error("Please enter a valid name and time (HH:MM).")
         else:
-            st.session_state.meds.append({
-                "name": name, "time": time_str, "days": days, "active": True, "reminder_min": int(reminder_min)
-            })
+            new_med = {"id": str(uuid4()), "name": name, "time": time_str, "days": days, "active": True, "reminder_min": int(reminder_min)}
+            st.session_state.meds.append(new_med)
             save_json(MEDS_PATH, st.session_state.meds)
             st.success(f"Added {name} at {time_str} on {', '.join(days)}")
+            st.experimental_rerun()
 
-# Edit/Delete
-for i, m in enumerate(st.session_state.meds):
+# Edit/Delete medicines
+for i, m in enumerate(list(st.session_state.meds)):
     with st.expander(f"{m['name']} @ {m['time']}  ({','.join(m['days'])})"):
         cA, cB, cC, cD = st.columns([1, 1, 1, 1])
         with cA:
-            st.session_state.meds[i]["active"] = st.checkbox("Active", value=m["active"], key=f"active_{i}")
+            active = st.checkbox("Active", value=m["active"], key=f"active_{m['id']}")
+            st.session_state.meds[i]["active"] = active
         with cB:
-            new_time = st.text_input("Time", value=m["time"], key=f"time_{i}")
+            new_time = st.text_input("Time", value=m["time"], key=f"time_{m['id']}")
             if parse_time(new_time):
                 st.session_state.meds[i]["time"] = new_time
         with cC:
-            new_days = st.multiselect("Days", WEEKDAYS, default=m["days"], key=f"days_{i}")
+            new_days = st.multiselect("Days", WEEKDAYS, default=m["days"], key=f"days_{m['id']}")
             st.session_state.meds[i]["days"] = new_days
         with cD:
-            rem = st.number_input("Reminder (min)", min_value=0, max_value=180, value=int(m.get("reminder_min", 10)), key=f"rem_{i}")
+            rem = st.number_input("Reminder (min)", min_value=0, max_value=180, value=int(m.get("reminder_min", 10)), key=f"rem_{m['id']}")
             st.session_state.meds[i]["reminder_min"] = int(rem)
 
         b1, b2 = st.columns([1,1])
         with b1:
-            if st.button("Save changes", key=f"save_{i}"):
+            if st.button("Save changes", key=f"save_{m['id']}"):
                 save_json(MEDS_PATH, st.session_state.meds)
                 st.success("Saved.")
         with b2:
-            if st.button(f"Delete {m['name']}", key=f"del_{i}"):
-                st.session_state.meds.pop(i)
+            if st.button(f"Delete {m['name']}", key=f"del_{m['id']}"):
+                # remove all future/past taken keys for this med id
+                med_id = m["id"]
+                # filter meds
+                st.session_state.meds = [x for x in st.session_state.meds if x["id"] != med_id]
+                # remove keys from taken_by_date
+                for date_key, lst in list(st.session_state.taken_by_date.items()):
+                    new_list = [k for k in lst if f"|{med_id}|" not in k]
+                    if new_list:
+                        st.session_state.taken_by_date[date_key] = new_list
+                    else:
+                        st.session_state.taken_by_date.pop(date_key, None)
                 save_json(MEDS_PATH, st.session_state.meds)
+                save_json(TAKEN_PATH, st.session_state.taken_by_date)
                 st.experimental_rerun()
+
