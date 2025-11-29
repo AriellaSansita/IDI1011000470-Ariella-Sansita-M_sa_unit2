@@ -122,11 +122,18 @@ with center:
         st.markdown("<div class='pill'>💊</div>",unsafe_allow_html=True)
         st.write("No medicines yet")
     else:
-        for n,t,s,k in sched:
-            c="green" if s=="taken" else "yellow" if s=="upcoming" else "red"
-            st.markdown(f"<b>{n}</b> {t} <span class='{c}'>({s})</span>",unsafe_allow_html=True)
-            if s!="taken":
-                if st.button(f"Mark Taken: {n}",key=k):
+        for idx, (n, t, s, k) in enumerate(sched):
+            c = "green" if s=="taken" else "yellow" if s=="upcoming" else "red"
+            st.markdown(
+                f"<b>{n}</b> {t} <span class='{c}'>({s})</span>",
+                unsafe_allow_html=True
+            )
+
+            # Unique key (important!)
+            unique_key = f"{k}|{idx}"
+
+            if s != "taken":
+                if st.button(f"Mark Taken: {n}", key=unique_key):
                     st.session_state.taken_today.add(k)
                     save_today()
                     st.rerun()
