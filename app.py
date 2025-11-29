@@ -14,9 +14,11 @@ st.set_page_config(page_title="MedTimer", page_icon="⏰", layout="wide")
 if "meds" not in st.session_state:
     # Each item: {"name": str, "time": "HH:MM", "days": ["Mon", ...]}
     st.session_state.meds = []
+
 if "taken_today" not in st.session_state:
     # Store taken keys: "YYYY-MM-DD|name|HH:MM"
     st.session_state.taken_today = set()
+
 if "tips_idx" not in st.session_state:
     st.session_state.tips_idx = 0
 
@@ -55,6 +57,7 @@ def build_today_schedule(grace_minutes: int = 60):
         days = m.get("days", WEEKDAYS)
         if today_name not in days:
             continue
+
         t = parse_time(m.get("time", ""))
         if not t:
             # Skip invalid time entries silently
@@ -124,7 +127,7 @@ with col1:
         if s["status"] != "taken":
             if st.button(f"Mark taken: {s['name']} @ {s['time'].strftime('%H:%M')}", key=s["key"]):
                 st.session_state.taken_today.add(s["key"])
-                # Use the new stable API
+                # Stable rerun API
                 st.rerun()
 
 # ---------- RIGHT: Score + Tips ----------
@@ -134,9 +137,47 @@ with col2:
     st.progress(score/100)
     st.write(f"**Score:** {score}%")
 
-    # Turtle/encouragement (emoji fallback for web)
+    # Encouragement (emoji fallback; Turtle graphics are best run locally)
     if score >= 80:
-        st.success("🎉 Great job! (Turtle reward available when running locally)")
+        st.success("🎉 Great job!")
     else:
         st.info("Keep going—you’ve got this!")
 
+    st.subheader("Tip of the day")
+    st.info(TIPS[st.session_state.tips_idx])
+    if st.button("Next tip"):
+        st.session_state.tips_idx = (st.session_state.tips_idx + 1) % len(TIPS)
+
+# ---------- Manage Medicines ----------
+st.divider()
+st.header("Manage Medicines")
+
+with st.form("add_med"):
+    name = st.text_input("Medicine name", placeholder="e.g., Metformin")
+    time_str = st.text_input("Time (24h HH:MM)", placeholder="08:00")
+    days = st.multiselect("Days", WEEKDAYS, default=WEEKDAYS)
+    submitted = st.form_submit_button("Add medicine")
+    if submitted:
+        t = parse_time(time_str)
+        if not name or not t:
+            st.error("Please enter a valid name and time (HH:MM).")
+        else:
+            st.session_state.meds.append({"name": name.strip(), "time": time_str.strip(), "days": days})
+            st.success(f"Added {name} at {time_str}")
+
+# Edit/Delete
+for i, m in enumerate(st.session_state.meds):
+    with st.expander(f"{m['name']} @ {m['time']}"):
+        # Update days
+        new_days = st.multiselect("Days", WEEKDAYS, default=m["days"], key=f"days_{i}")
+        st.session_state.meds[i]["days"] = new_days
+
+        # Update time (validate)
+        new_time = st.text_input("Time (HH:MM)", value=m["time"], key=f"time_{i}")
+        if parse_time(new_time):
+            st.session_state.meds[i]["time"] = new_time
+
+        # Delete
+        if st.button(f"Delete {m['name']}", key=f"del_{i}"):
+            st.session_state.meds.pop(i)
+            st.rerun()
