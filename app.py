@@ -65,10 +65,20 @@ def save_today():
 st.markdown("""
 <style>
 body{background:#f6f9fc;}
-.card{background:white;padding:24px;border-radius:18px;
-box-shadow:0 4px 20px rgba(0,0,0,.05);margin-bottom:20px;}
-.center{height:420px;display:flex;flex-direction:column;
-align-items:center;justify-content:center;text-align:center;}
+.card{
+    background:white;
+    padding:24px;
+    border-radius:18px;
+    box-shadow:0 4px 20px rgba(0,0,0,.05);
+    margin-bottom:20px;
+}
+.center{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    text-align:center;
+}
 .tip{background:#3fb5a3;color:white;}
 .pill{font-size:60px;}
 .green{color:#2e7d32;} .yellow{color:#f9a825;} .red{color:#c62828;}
@@ -146,5 +156,3 @@ with right:
     st.subheader("💡 Tip of the Day")
     st.write("If you miss a dose, just take the next one on schedule.")
     st.markdown("</div>",unsafe_allow_html=True)
-
-
