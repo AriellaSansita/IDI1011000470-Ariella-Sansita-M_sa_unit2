@@ -156,3 +156,4 @@ with right:
     st.subheader("💡 Tip of the Day")
     st.write("If you miss a dose, just take the next one on schedule.")
     st.markdown("</div>",unsafe_allow_html=True)
+
