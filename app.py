@@ -65,20 +65,10 @@ def save_today():
 st.markdown("""
 <style>
 body{background:#f6f9fc;}
-.card{
-    background:white;
-    padding:24px;
-    border-radius:18px;
-    box-shadow:0 4px 20px rgba(0,0,0,.05);
-    margin-bottom:20px;
-}
-.center{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:flex-start;
-    text-align:center;
-}
+.card{background:white;padding:24px;border-radius:18px;
+box-shadow:0 4px 20px rgba(0,0,0,.05);margin-bottom:20px;}
+.center{height:420px;display:flex;flex-direction:column;
+align-items:center;justify-content:center;text-align:center;}
 .tip{background:#3fb5a3;color:white;}
 .pill{font-size:60px;}
 .green{color:#2e7d32;} .yellow{color:#f9a825;} .red{color:#c62828;}
@@ -122,18 +112,11 @@ with center:
         st.markdown("<div class='pill'>💊</div>",unsafe_allow_html=True)
         st.write("No medicines yet")
     else:
-        for idx, (n, t, s, k) in enumerate(sched):
-            c = "green" if s=="taken" else "yellow" if s=="upcoming" else "red"
-            st.markdown(
-                f"<b>{n}</b> {t} <span class='{c}'>({s})</span>",
-                unsafe_allow_html=True
-            )
-
-            # Unique key (important!)
-            unique_key = f"{k}|{idx}"
-
-            if s != "taken":
-                if st.button(f"Mark Taken: {n}", key=unique_key):
+        for n,t,s,k in sched:
+            c="green" if s=="taken" else "yellow" if s=="upcoming" else "red"
+            st.markdown(f"<b>{n}</b> {t} <span class='{c}'>({s})</span>",unsafe_allow_html=True)
+            if s!="taken":
+                if st.button(f"Mark Taken: {n}",key=k):
                     st.session_state.taken_today.add(k)
                     save_today()
                     st.rerun()
@@ -163,4 +146,3 @@ with right:
     st.subheader("💡 Tip of the Day")
     st.write("If you miss a dose, just take the next one on schedule.")
     st.markdown("</div>",unsafe_allow_html=True)
-
