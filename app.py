@@ -1,7 +1,6 @@
 import streamlit as st
 from datetime import datetime, date, timedelta
 import pandas as pd
-import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="MedTimer", layout="centered")
 
@@ -135,16 +134,4 @@ elif st.session_state.page=="add":
         }
         st.success("Added")
         st.rerun()
-
-# ------------------ SUMMARY ------------------
-elif st.session_state.page=="summary":
-    st.header("Summary")
-
-    if len(st.session_state.daily_scores)==0:
-        st.info("No history yet")
-    else:
-        df = pd.DataFrame.from_dict(st.session_state.daily_scores,orient="index")
-        fig,ax = plt.subplots()
-        ax.bar(df.index,df["score"])
-        st.pyplot(fig)
 
