@@ -1,148 +1,361 @@
 import streamlit as st
-import datetime as dt
-import json
-from pathlib import Path
+from datetime import datetime, date, timedelta
+from PIL import Image, ImageDraw
+import pandas as pd
+import random
 
-# ---------------- CONFIG ----------------
-st.set_page_config(page_title="MedTimer", page_icon="⏰", layout="wide")
+# -----------------------
+# PAGE CONFIG
+# -----------------------
+st.set_page_config(page_title="MedTimer", layout="centered")
 
-# ---------------- DATA ----------------
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
-MEDS_PATH = DATA_DIR / "meds.json"
-LOG_PATH = DATA_DIR / "log.json"
-WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
+# -----------------------
+# UX / CONSTANTS
+# -----------------------
+PRIMARY = "#2b7a78"
+MOTIVATIONAL = [
+    "One dose at a time — you're doing great!",
+    "Taking meds is taking care of your future self.",
+    "Small habits create big health.",
+    "Consistency is strength. Keep going!",
+]
+TIPS = [
+    "Keep water nearby when taking meds.",
+    "Pair meds with a daily routine (e.g., breakfast).",
+    "Use alarms 10 minutes before dose time.",
+    "Store pills in a visible, consistent place.",
+]
 
-def load(p, d): return json.loads(p.read_text()) if p.exists() else d
-def save(p, x): p.write_text(json.dumps(x, indent=2))
+CARD_TEXT_COLOR = "black"  # ensure readability inside colored boxes
+
+# -----------------------
+# SESSION STATE INIT
+# -----------------------
+if "page" not in st.session_state:
+    st.session_state.page = "today"
 
 if "meds" not in st.session_state:
-    st.session_state.meds = load(MEDS_PATH, [])
+    st.session_state.meds = {
+        "Aspirin": {"time": "12:00", "note": "After lunch", "taken_today": False},
+        "Vitamin D": {"time": "18:00", "note": "With dinner", "taken_today": False},
+        "Iron": {"time": "08:00", "note": "Before breakfast", "taken_today": False},
+    }
 
-if "log" not in st.session_state:
-    st.session_state.log = load(LOG_PATH, {})
+if "history" not in st.session_state:
+    # history entries are dicts: {"med": name, "date": "YYYY-MM-DD", "time": "HH:MM"}
+    st.session_state.history = []
 
-if "taken_today" not in st.session_state:
-    st.session_state.taken_today = set()
+if "last_reset_date" not in st.session_state:
+    st.session_state.last_reset_date = date.today().isoformat()
 
-# ---------------- HELPERS ----------------
-def today(): return dt.date.today().isoformat()
+# -----------------------
+# HELPERS
+# -----------------------
+def go(p):
+    st.session_state.page = p
 
-def parse_time(t):
-    try:
-        h,m = map(int,t.split(":"))
-        return dt.time(h,m)
-    except: return None
+def now_time_str_server():
+    # server time (kept for logging) - not shown to user
+    return datetime.now().strftime("%H:%M")
 
-def schedule():
-    out=[]
-    now = dt.datetime.now()
-    for m in st.session_state.meds:
-        t=parse_time(m["time"])
-        if not t: continue
-        dtm = dt.datetime.combine(dt.date.today(),t)
-        k=f"{today()}|{m['name']}|{m['time']}"
-        if k in st.session_state.taken_today: s="taken"
-        elif now<dtm: s="upcoming"
-        else: s="missed"
-        out.append((m["name"],m["time"],s,k))
-    return out
+def today_str():
+    return date.today().isoformat()
 
-def streak():
-    s=0
-    for i in range(30):
-        d=(dt.date.today()-dt.timedelta(days=i)).isoformat()
-        if d in st.session_state.log and st.session_state.log[d]["taken"]:
-            s+=1
-        else: break
-    return s
+def reset_daily_if_needed():
+    last = date.fromisoformat(st.session_state.last_reset_date)
+    if last < date.today():
+        for k in st.session_state.meds:
+            st.session_state.meds[k]["taken_today"] = False
+        st.session_state.last_reset_date = today_str()
 
-def save_today():
-    st.session_state.log[today()]={"taken":list(st.session_state.taken_today)}
-    save(LOG_PATH, st.session_state.log)
+reset_daily_if_needed()
 
-# ---------------- STYLE ----------------
-st.markdown("""
-<style>
-body{background:#f6f9fc;}
-.card{background:white;padding:24px;border-radius:18px;
-box-shadow:0 4px 20px rgba(0,0,0,.05);margin-bottom:20px;}
-.center{height:420px;display:flex;flex-direction:column;
-align-items:center;justify-content:center;text-align:center;}
-.tip{background:#3fb5a3;color:white;}
-.pill{font-size:60px;}
-.green{color:#2e7d32;} .yellow{color:#f9a825;} .red{color:#c62828;}
-</style>
-""", unsafe_allow_html=True)
+def mark_taken(med):
+    st.session_state.meds[med]["taken_today"] = True
+    st.session_state.history.append({"med": med, "date": today_str(), "time": now_time_str_server()})
+    st.rerun()
 
-# ---------------- LAYOUT ----------------
-left, center, right = st.columns([1.1,2.2,1.1])
+def unmark_taken(med):
+    st.session_state.meds[med]["taken_today"] = False
+    # remove last entry for this med today if present
+    for i in range(len(st.session_state.history)-1, -1, -1):
+        e = st.session_state.history[i]
+        if e["med"] == med and e["date"] == today_str():
+            st.session_state.history.pop(i)
+            break
+    st.rerun()
 
-# ---------------- LEFT: ADD MEDICINE ----------------
-with left:
-    st.markdown("<div class='card'>",unsafe_allow_html=True)
-    st.subheader("Add Medicine")
+def delete_med(med):
+    st.session_state.meds.pop(med, None)
+    st.session_state.history = [h for h in st.session_state.history if h["med"] != med]
+    st.rerun()
 
-    name=st.text_input("Medicine Name *")
-    time=st.text_input("Time (HH:MM) *")
-    if st.button("➕ Add Medicine"):
-        if name and parse_time(time):
-            st.session_state.meds.append({"name":name,"time":time})
-            save(MEDS_PATH,st.session_state.meds)
-            st.success("Medicine added!")
-        else:
-            st.error("Invalid input")
+def calculate_weekly_adherence():
+    """
+    Counts scheduled doses for a full 7-day week (Mon-Sun) and taken entries from history that fall within this week.
+    Returns: score (int 0-100), scheduled (int), taken (int), week_start (date)
+    """
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())  # Monday
+    week_end = week_start + timedelta(days=6)  # Sunday
 
-    if st.button("🗑️ Clear All"):
-        st.session_state.meds=[]
-        st.session_state.log={}
-        save(MEDS_PATH,[])
-        save(LOG_PATH,{})
-        st.success("All cleared!")
+    days_in_week = 7
+    scheduled = len(st.session_state.meds) * days_in_week
 
-    st.markdown("</div>",unsafe_allow_html=True)
+    taken = 0
+    for h in st.session_state.history:
+        try:
+            hd = date.fromisoformat(h["date"])
+        except Exception:
+            continue
+        if week_start <= hd <= week_end:
+            taken += 1
 
-# ---------------- CENTER: TODAY ----------------
-with center:
-    st.markdown("<div class='card center'>",unsafe_allow_html=True)
-    st.subheader("Today's Checklist")
-    sched=schedule()
+    score = int((taken / scheduled) * 100) if scheduled > 0 else 0
+    # clamp
+    if score < 0: score = 0
+    if score > 100: score = 100
+    return score, scheduled, taken, week_start, week_end
 
-    if not sched:
-        st.markdown("<div class='pill'>💊</div>",unsafe_allow_html=True)
-        st.write("No medicines yet")
+# -----------------------
+# DRAW IMAGE (PIL)
+# -----------------------
+def draw_smiley(score, size_px=300):
+    img = Image.new("RGB", (size_px, size_px), "white")
+    d = ImageDraw.Draw(img)
+
+    # Trophy for >= 90
+    if score >= 90:
+        # cup body
+        box = [size_px*0.35, size_px*0.28, size_px*0.65, size_px*0.55]
+        d.rectangle(box, fill="#FFD700", outline="black")
+        # base
+        base = [size_px*0.43, size_px*0.55, size_px*0.57, size_px*0.65]
+        d.rectangle(base, fill="#FFD700", outline="black")
+        # text
+        d.text((size_px*0.35, size_px*0.12), "Great!", fill="black")
+        return img
+
+    # face color
+    if score >= 80:
+        face = "#b7f5c2"
+    elif score >= 50:
+        face = "#fff2b2"
     else:
-        for n,t,s,k in sched:
-            c="green" if s=="taken" else "yellow" if s=="upcoming" else "red"
-            st.markdown(f"<b>{n}</b> {t} <span class='{c}'>({s})</span>",unsafe_allow_html=True)
-            if s!="taken":
-                if st.button(f"Mark Taken: {n}",key=k):
-                    st.session_state.taken_today.add(k)
-                    save_today()
-                    st.rerun()
+        face = "#ffb3b3"
 
-    st.markdown("</div>",unsafe_allow_html=True)
+    margin = size_px * 0.08
+    d.ellipse([margin, margin, size_px-margin, size_px-margin], fill=face, outline="black")
 
-# ---------------- RIGHT SIDE ----------------
-with right:
-    # Weekly
-    st.markdown("<div class='card'>",unsafe_allow_html=True)
-    w=len(st.session_state.taken_today)
-    st.subheader("Weekly Adherence")
-    st.markdown(f"## 🔴 {w*10}%")
-    st.progress(min(w/10,1.0))
-    st.caption("Reach 80% for a badge!")
-    st.markdown("</div>",unsafe_allow_html=True)
+    # eyes
+    eye_r = int(size_px * 0.04)
+    d.ellipse([size_px*0.32-eye_r, size_px*0.38-eye_r, size_px*0.32+eye_r, size_px*0.38+eye_r], fill="black")
+    d.ellipse([size_px*0.68-eye_r, size_px*0.38-eye_r, size_px*0.68+eye_r, size_px*0.38+eye_r], fill="black")
 
-    # Mascot
-    st.markdown("<div class='card center'>",unsafe_allow_html=True)
-    st.markdown("🐢")
-    st.subheader("Keep going!")
-    st.write(f"Streak: {streak()} day(s)")
-    st.markdown("</div>",unsafe_allow_html=True)
+    # mouth shape
+    if score >= 80:
+        # smile arc
+        d.arc([size_px*0.28, size_px*0.46, size_px*0.72, size_px*0.72], start=0, end=180, fill="black", width=4)
+    elif score >= 50:
+        # line
+        d.line([size_px*0.36, size_px*0.62, size_px*0.64, size_px*0.62], fill="black", width=4)
+    else:
+        # sad arc
+        d.arc([size_px*0.28, size_px*0.56, size_px*0.72, size_px*0.82], start=180, end=360, fill="black", width=4)
 
-    # Tip
-    st.markdown("<div class='card tip'>",unsafe_allow_html=True)
-    st.subheader("💡 Tip of the Day")
-    st.write("If you miss a dose, just take the next one on schedule.")
-    st.markdown("</div>",unsafe_allow_html=True)
+    return img
+
+# -----------------------
+# HEADER + NAV
+# -----------------------
+st.markdown("<h1 style='text-align:center; margin-bottom:6px;'>MedTimer</h1>", unsafe_allow_html=True)
+# Removed subtitle per request (no "A senior-friendly daily medicine tracker")
+st.markdown("---")
+
+c1, c2, c3 = st.columns([1,1,1])
+with c1:
+    if st.button("Today"):
+        go("today")
+with c2:
+    if st.button("All Meds"):
+        go("all_meds")
+with c3:
+    if st.button("Add / Edit"):
+        go("add")
+
+st.write("")  # spacing
+
+# Inject a tiny JS clock to show client (browser) local time.
+# This displays "Current time: hh:mm:ss" using browser time.
+st.markdown(
+    """
+    <div style='font-size:14px; color: #333;'>Current time: <span id="client_time">--:--:--</span></div>
+    <script>
+    function updateClientTime(){
+        const el = document.getElementById('client_time');
+        if(!el) return;
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2,'0');
+        const mm = String(now.getMinutes()).padStart(2,'0');
+        const ss = String(now.getSeconds()).padStart(2,'0');
+        el.innerText = hh + ":" + mm + ":" + ss;
+    }
+    setInterval(updateClientTime, 1000);
+    updateClientTime();
+    </script>
+    """,
+    unsafe_allow_html=True
+)
+
+st.write("")  # spacing
+
+# -----------------------
+# PAGE: TODAY
+# -----------------------
+if st.session_state.page == "today":
+    st.subheader("Today's Checklist")
+    st.write("")  # small gap
+
+    left, right = st.columns([2, 1])
+
+    # LEFT: medicine cards (make them long/wide)
+    with left:
+        if len(st.session_state.meds) == 0:
+            st.info("No medicines added — go to Add / Edit.")
+        else:
+            for idx, (med, info) in enumerate(st.session_state.meds.items()):
+                due = info.get("time", "--:--")
+                note = info.get("note", "")
+                taken = info.get("taken_today", False)
+
+                now_client = ""  # client time shown above; for status use server time for compare
+                now_server = now_time_str_server()
+
+                # compare times as HH:MM strings (works for 24h format)
+                if taken:
+                    bg = "#b7f5c2"
+                    status_text = "Taken"
+                else:
+                    bg = "#bfe4ff" if now_server <= due else "#ffb3b3"
+                    status_text = "Upcoming" if now_server <= due else "Missed"
+
+                # ensure text inside colored box is black and card stretches full width
+                st.markdown(
+                    f"""
+                    <div style='
+                        background:{bg};
+                        padding:16px;
+                        border-radius:12px;
+                        margin-bottom:12px;
+                        width:100%;
+                        display:block;
+                        box-sizing:border-box;
+                    '>
+                        <div style='font-size:18px; color:{CARD_TEXT_COLOR}; font-weight:600;'>{med} — {due}</div>
+                        <div style='font-size:15px; color:{CARD_TEXT_COLOR}; margin-top:6px;'>{note}</div>
+                        <div style='font-size:14px; color:{CARD_TEXT_COLOR}; margin-top:6px;'><i>{status_text}</i></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                # action buttons
+                b1, b2, b3 = st.columns([1,1,1])
+                with b1:
+                    if not taken and st.button(f"Take {med}", key=f"take_{idx}"):
+                        mark_taken(med)
+                with b2:
+                    if taken and st.button(f"Undo {med}", key=f"undo_{idx}"):
+                        unmark_taken(med)
+                with b3:
+                    if st.button(f"Delete {med}", key=f"del_{idx}"):
+                        delete_med(med)
+
+    # RIGHT: weekly summary & graphic
+    with right:
+        st.subheader("Weekly Summary (Mon–Sun)")
+        score, scheduled, taken, ws, we = calculate_weekly_adherence()
+
+        # progress bar (use integer)
+        st.progress(score / 100)
+        st.markdown(f"**Score:** {score}%")
+        st.markdown(f"**Scheduled doses:** {scheduled}")
+        st.markdown(f"**Taken (this week):** {taken}")
+        st.write("")  # gap
+
+        st.info(random.choice(MOTIVATIONAL))
+        st.success(random.choice(TIPS))
+
+        # PIL-driven image
+        img = draw_smiley(score, size_px=260)
+        st.image(img, use_column_width=False)
+
+        # download CSV of entire history
+        if len(st.session_state.history) > 0:
+            df_hist = pd.DataFrame(st.session_state.history)
+        else:
+            df_hist = pd.DataFrame(columns=["med", "date", "time"])
+        st.download_button("Download Weekly CSV", data=df_hist.to_csv(index=False), file_name="med_history.csv", mime="text/csv")
+
+# -----------------------
+# PAGE: ALL MEDS
+# -----------------------
+elif st.session_state.page == "all_meds":
+    st.subheader("All Medications")
+    if len(st.session_state.meds) == 0:
+        st.info("No medications yet.")
+    else:
+        df = pd.DataFrame([
+            {"Name": name, "Time": info.get("time",""), "Note": info.get("note",""), "Taken Today": info.get("taken_today", False)}
+            for name, info in st.session_state.meds.items()
+        ])
+        st.dataframe(df)
+
+# -----------------------
+# PAGE: ADD / EDIT
+# -----------------------
+elif st.session_state.page == "add":
+    st.subheader("Add / Edit Medicines")
+
+    mode = st.radio("Mode", ["Add New", "Edit Existing"])
+    meds_list = list(st.session_state.meds.keys())
+
+    if mode == "Add New":
+        new_name = st.text_input("Medicine name")
+        new_time = st.time_input("Time", value=datetime.strptime("08:00", "%H:%M").time())
+        new_note = st.text_input("Note (optional)")
+        if st.button("Add"):
+            if new_name.strip() == "":
+                st.warning("Enter a name.")
+            elif new_name in st.session_state.meds:
+                st.warning("Medicine already exists.")
+            else:
+                st.session_state.meds[new_name] = {"time": new_time.strftime("%H:%M"), "note": new_note, "taken_today": False}
+                st.success("Added.")
+                st.rerun()
+    else:
+        if len(meds_list) == 0:
+            st.info("No meds to edit.")
+        else:
+            target = st.selectbox("Select", meds_list)
+            info = st.session_state.meds[target]
+            edit_name = st.text_input("Name", value=target)
+            edit_time = st.time_input("Time", value=datetime.strptime(info["time"], "%H:%M").time())
+            edit_note = st.text_input("Note", value=info.get("note",""))
+            if st.button("Save changes"):
+                # rename safely
+                st.session_state.meds.pop(target, None)
+                st.session_state.meds[edit_name] = {"time": edit_time.strftime("%H:%M"), "note": edit_note, "taken_today": False}
+                # update history names for past entries
+                for h in st.session_state.history:
+                    if h["med"] == target:
+                        h["med"] = edit_name
+                st.success("Saved.")
+                st.rerun()
+
+# -----------------------
+# FOOTER
+# -----------------------
+st.markdown("---")
+st.markdown("<div style='text-align:center; font-size:12px; color:#666'>MedTimer — data stored in-session only. Deploy via Streamlit Cloud.</div>", unsafe_allow_html=True)
+
