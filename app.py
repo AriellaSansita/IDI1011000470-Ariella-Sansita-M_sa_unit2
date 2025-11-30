@@ -176,38 +176,99 @@ elif st.session_state.page == "all_meds":
 # -----------------------
 # ADD / EDIT PAGE
 # -----------------------
-elif st.session_state.page == "add":
-    st.header("Add / Edit Medicines")
-    mode = st.radio("Mode",["Add New","Edit Existing"])
+st.header("Add / Edit Medicines")
 
-    if mode == "Add New":
-        name = st.text_input("Medicine name")
-        time_val = st.time_input("Time")
-        note = st.text_input("Note")
+mode = st.radio("Mode", ["Add", "Edit"])
 
-        if st.button("Add medicine"):
+# -----------------------
+# ADD MODE
+# -----------------------
+if mode == "Add":
+    name = st.text_input("Medicine name")
+    note = st.text_input("Note")
+    freq = st.number_input("How many times per day?", min_value=1, max_value=10, value=1)
+
+    st.write("Enter dose times:")
+    new_times = []
+    for i in range(freq):
+        tm = st.time_input(
+            f"Dose {i+1}",
+            value=datetime.strptime("08:00", "%H:%M").time()
+        )
+        new_times.append(tm.strftime("%H:%M"))
+
+    st.write("Repeat on days:")
+    day_cols = st.columns(7)
+    selected_days = []
+    for i, d in enumerate(WEEKDAYS):
+        if day_cols[i].checkbox(d, True, key=f"add_{d}"):
+            selected_days.append(d)
+
+    if st.button("Add"):
+        if name.strip() == "":
+            st.warning("Enter a name.")
+        else:
             st.session_state.meds[name] = {
-                "time": time_val.strftime("%H:%M"),
+                "doses": new_times,
                 "note": note,
-                "taken_today": False,
-                "days": WEEKDAYS.copy(),
-                "freq": "Once"
+                "days": selected_days,
+                "taken_today": [False] * len(new_times)
             }
+            st.success("Added.")
             st.rerun()
 
-    else:
-        target = st.selectbox("Select medicine",list(st.session_state.meds.keys()))
+# -----------------------
+# EDIT MODE
+# -----------------------
+else:
+    meds = list(st.session_state.meds.keys())
+
+    if meds:
+        target = st.selectbox("Select medicine", meds)
         info = st.session_state.meds[target]
 
-        new_time = st.time_input("Time",datetime.strptime(info["time"],"%H:%M").time())
-        new_note = st.text_input("Note",info["note"])
+        new_name = st.text_input("Name", target)
+        new_note = st.text_input("Note", info["note"])
+        freq = st.number_input(
+            "Times per day",
+            min_value=1,
+            max_value=10,
+            value=len(info["doses"])
+        )
 
-        if st.button("Save Changes"):
-            info["time"] = new_time.strftime("%H:%M")
-            info["note"] = new_note
+        st.write("Edit dose times:")
+        new_times = []
+        for i in range(freq):
+            default = info["doses"][i] if i < len(info["doses"]) else "08:00"
+            tm = st.time_input(
+                f"Dose {i+1}",
+                value=datetime.strptime(default, "%H:%M").time()
+            )
+            new_times.append(tm.strftime("%H:%M"))
+
+        st.write("Repeat on days:")
+        cols = st.columns(7)
+        new_days = []
+        for i, d in enumerate(WEEKDAYS):
+            if cols[i].checkbox(d, d in info["days"], key=f"edit_{d}"):
+                new_days.append(d)
+
+        # SAVE
+        if st.button("Save changes"):
+            st.session_state.meds.pop(target)
+            st.session_state.meds[new_name] = {
+                "doses": new_times,
+                "note": new_note,
+                "days": new_days,
+                "taken_today": [False] * len(new_times)
+            }
+            st.success("Saved.")
             st.rerun()
 
-        st.error("DANGER ZONE")
+        # DELETE FEATURE (ADDED ✅)
+        st.markdown("---")
+        st.error("Danger Zone")
         if st.button("DELETE THIS MEDICINE"):
-            delete_med(target)
-
+            st.session_state.meds.pop(target)
+            st.success("Medicine deleted.")
+            st.rerun()
