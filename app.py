@@ -30,7 +30,6 @@ if "last_rollover_date" not in st.session_state:
 if "client_time" not in st.session_state:
     st.session_state.client_time = "00:00"
 
-
 # ---------- HELPERS ----------
 def go(p): st.session_state.page = p
 def today_str(): return date.today().isoformat()
@@ -215,6 +214,85 @@ elif st.session_state.page == "all_meds":
 # ---------- ADD / EDIT ----------
 elif st.session_state.page == "add":
     st.header("Add / Edit Medicines")
+    
+    # Confirmation handling
+    if "confirm_action" not in st.session_state:
+        st.session_state.confirm_action = None
+    
+    if st.session_state.confirm_action:
+        action = st.session_state.confirm_action
+        if action == "add":
+            st.warning("Are you sure you want to add this medicine?")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Yes, Add"):
+                    # Perform add
+                    name = st.session_state.temp_name
+                    note = st.session_state.temp_note
+                    times = st.session_state.temp_times
+                    sel = st.session_state.temp_sel
+                    freq = st.session_state.temp_freq
+                    st.session_state.meds[name.strip()] = {
+                        "time": times,
+                        "note": note,
+                        "days": sel,
+                        "freq": freq,
+                    }
+                    st.success("Added successfully!")
+                    st.session_state.confirm_action = None
+                    st.rerun()
+            with col2:
+                if st.button("Cancel"):
+                    st.session_state.confirm_action = None
+                    st.rerun()
+        elif action == "save":
+            st.warning("Are you sure you want to save changes?")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Yes, Save"):
+                    # Perform save
+                    target = st.session_state.temp_target
+                    new_name = st.session_state.temp_new_name
+                    new_note = st.session_state.temp_new_note
+                    new_times = st.session_state.temp_new_times
+                    sel = st.session_state.temp_sel
+                    freq = st.session_state.temp_freq
+                    st.session_state.meds.pop(target)
+                    st.session_state.meds[new_name] = {
+                        "time": new_times,
+                        "note": new_note,
+                        "days": sel,
+                        "freq": freq,
+                    }
+                    for h in st.session_state.history:
+                        if h["med"] == target:
+                            h["med"] = new_name
+                    st.success("Saved successfully!")
+                    st.session_state.confirm_action = None
+                    st.rerun()
+            with col2:
+                if st.button("Cancel"):
+                    st.session_state.confirm_action = None
+                    st.rerun()
+        elif action == "delete":
+            st.warning("Are you sure you want to delete this medicine? This action cannot be undone.")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Yes, Delete"):
+                    # Perform delete
+                    target = st.session_state.temp_target
+                    st.session_state.meds.pop(target)
+                    # Remove from history
+                    st.session_state.history = [h for h in st.session_state.history if h["med"] != target]
+                    st.success("Deleted successfully!")
+                    st.session_state.confirm_action = None
+                    st.rerun()
+            with col2:
+                if st.button("Cancel"):
+                    st.session_state.confirm_action = None
+                    st.rerun()
+        return  # Stop rendering the rest until confirmation is handled
+    
     mode = st.radio("Mode", ["Add New", "Edit Existing"])
 
     # ----- Add -----
@@ -237,13 +315,13 @@ elif st.session_state.page == "add":
             if not name.strip():
                 st.warning("Enter a name")
             else:
-                st.session_state.meds[name.strip()] = {
-                    "time": times,
-                    "note": note,
-                    "days": sel,
-                    "freq": freq,
-                }
-                st.success("Added")
+                # Store temp data and set confirm
+                st.session_state.temp_name = name.strip()
+                st.session_state.temp_note = note
+                st.session_state.temp_times = times
+                st.session_state.temp_sel = sel
+                st.session_state.temp_freq = freq
+                st.session_state.confirm_action = "add"
                 st.rerun()
 
     # ----- Edit -----
@@ -274,16 +352,21 @@ elif st.session_state.page == "add":
             }
             sel = [d for d, c in day_checks.items() if c]
 
-            if st.button("Save"):
-                st.session_state.meds.pop(target)
-                st.session_state.meds[new_name] = {
-                    "time": new_times,
-                    "note": new_note,
-                    "days": sel,
-                    "freq": freq,
-                }
-                for h in st.session_state.history:
-                    if h["med"] == target:
-                        h["med"] = new_name
-                st.success("Saved")
-                st.rerun()
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Save"):
+                    # Store temp data and set confirm
+                    st.session_state.temp_target = target
+                    st.session_state.temp_new_name = new_name
+                    st.session_state.temp_new_note = new_note
+                    st.session_state.temp_new_times = new_times
+                    st.session_state.temp_sel = sel
+                    st.session_state.temp_freq = freq
+                    st.session_state.confirm_action = "save"
+                    st.rerun()
+            with col2:
+                if st.button("Delete"):
+                    # Store temp data and set confirm
+                    st.session_state.temp_target = target
+                    st.session_state.confirm_action = "delete"
+                    st.rerun()
