@@ -1,4 +1,4 @@
-add/ edit should only be in add/ edit page not on all pages
+
 
 import streamlit as st
 from datetime import datetime, date, timedelta
