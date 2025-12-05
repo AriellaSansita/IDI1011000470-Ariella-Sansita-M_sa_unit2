@@ -74,9 +74,13 @@ def rollover():
             }
         st.session_state.last_rollover_date = today.isoformat()
 
-def mark_taken(med, hm):
-    st.session_state.history.append({"med": med, "date": today_str(), "time": hm})
-    st.experimental_rerun()
+def unmark_taken(med, hm):
+    for i in range(len(st.session_state.history)-1, -1, -1):
+        h = st.session_state.history[i]
+        if h["med"] == med and h["time"] == hm and h["date"] == today_str():
+            st.session_state.history.pop(i)
+            break
+    st.rerun()
 
 def unmark_taken(med, hm):
     for i in range(len(st.session_state.history)-1, -1, -1):
@@ -84,7 +88,7 @@ def unmark_taken(med, hm):
         if h["med"] == med and h["time"] == hm and h["date"] == today_str():
             st.session_state.history.pop(i)
             break
-    st.experimental_rerun()
+    st.rerun()
 
 def smile(score, size=200):
     img = Image.new("RGB", (size, size), "white")
@@ -280,4 +284,5 @@ elif st.session_state.page == "add":
                     if h["med"] == target:
                         h["med"] = new_name
                 st.success("Saved")
-                st.experimental_rerun()
+                st.rerun()
+
