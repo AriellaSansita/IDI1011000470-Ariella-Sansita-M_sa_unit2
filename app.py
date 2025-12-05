@@ -1,7 +1,17 @@
 
-import io, os, math, wave, turtle, matplotlib.pyplot as plt, pandas as pd, streamlit as st
+# MedTimer — Daily Medicine Companion (Python-only, compact)
+# Features: Add/Edit/Delete meds, color-coded statuses, weekly adherence score,
+# Turtle/PIL encouragement graphics, audio beep, upcoming window, test mode,
+# high-contrast mode, font size slider, pie chart, CSV (+ PDF if PyMuPDF).
+
+import io, os, math, wave, random
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
 from PIL import Image, ImageDraw
 from datetime import datetime, date, time as dtime, timedelta
+
+# Optional PDF (PyMuPDF). Falls back to CSV-only if unavailable.
 try:
     import fitz  # PyMuPDF
     HAS_PDF = True
@@ -107,19 +117,22 @@ def smile(score,size=200):
     elif score>=50: d.line([size*0.36,size*0.62,size*0.64,size*0.62],fill="black",width=4)
     else: d.arc([size*0.28,size*0.62,size*0.72,size*0.9],180,360,fill="black",width=4)
     return img
+
 def turtle_trophy_png(path="trophy.png",size=300):
+    """Try to draw a trophy via turtle (requires Tkinter). If unavailable, draw with PIL instead."""
     try:
+        import turtle  # lazy import to avoid Tkinter error at module load
         screen=turtle.Screen(); screen.setup(width=size,height=size)
         t=turtle.Turtle(); t.hideturtle(); t.speed(0); t.color("gold")
         t.penup(); t.goto(-30,-80); t.pendown(); t.begin_fill()
         for _ in range(2): t.forward(60); t.left(90); t.forward(30); t.left(90)
         t.end_fill(); t.penup(); t.goto(0,-20); t.pendown(); t.begin_fill(); t.circle(80,steps=50); t.end_fill()
-        cv=screen.getcanvas(); eps="trophy.eps"; cv.postscript(file=eps,colormode="color"); turtle.bye()
+        eps="trophy.eps"; screen.getcanvas().postscript(file=eps,colormode="color"); turtle.bye()
         img=Image.open(eps); img.save(path); 
         try: os.remove(eps)
         except: pass
         return path
-    except:
+    except Exception:
         img=Image.new("RGB",(size,size),"white"); d=ImageDraw.Draw(img)
         d.rectangle([size*0.35,size*0.7,size*0.65,size*0.82],fill="gold",outline="black")
         d.ellipse([size*0.25,size*0.25,size*0.75,size*0.75],fill="gold",outline="black")
@@ -149,6 +162,7 @@ with st.sidebar:
     st.divider(); st.header("Accessibility")
     font_px=st.slider("Font size (px)",14,24,18); dark=st.checkbox("High contrast (dark mode)")
 
+# ---- CSS (no JS) ----
 bg="#0E1117" if dark else "#FFFFFF"; fg="#FFFFFF" if dark else "#000000"
 st.markdown(f"""
 <style>
@@ -207,7 +221,7 @@ if st.session_state.page=="today":
             st.image(turtle_trophy_png(), use_column_width=True)
         else:
             st.image(smile(score), use_column_width=True)
-        import random; st.caption(f"💬 {random.choice(QUOTES)}")
+        st.caption(f"💬 {random.choice(QUOTES)}")
         fig,ax=plt.subplots(figsize=(3,3)); missed=max(0,sched-taken)
         ax.pie([taken,missed],labels=["Taken","Remaining"],colors=["#b7f5c2","#ffb3b3"],autopct="%1.0f%%",startangle=90); ax.axis("equal")
         st.pyplot(fig)
@@ -233,7 +247,9 @@ elif st.session_state.page=="add":
         freq=int(st.number_input("Doses per day",1,MAX_DOSES_PER_DAY,1))
         st.write("Dose times:"); times=[]; cols=st.columns(min(freq,4))
         for i in range(freq):
-            with cols[i%len(cols)]: t=st.time_input(f"Time #{i+1}", value=datetime.strptime("09:00","%H:%M").time()); times.append(t.strftime("%H:%M"))
+            with cols[i%len(cols)]:
+                t=st.time_input(f"Time #{i+1}", value=datetime.strptime("09:00","%H:%M").time())
+                times.append(t.strftime("%H:%M"))
         st.write("Repeat on days:"); cols=st.columns(7)
         day_checks={wd:cols[i].checkbox(wd,True) for i,wd in enumerate(WEEKDAYS)}
         days=default_days([d for d,c in day_checks.items() if c])
@@ -314,5 +330,4 @@ elif st.session_state.page=="reports":
         st.download_button("Download PDF", b, "medtimer_weekly.pdf","application/pdf")
     else:
         st.info("PDF unavailable (install PyMuPDF to enable).")
-
 
