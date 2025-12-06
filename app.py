@@ -142,7 +142,8 @@ if mode=="Add":
         if not name.strip(): st.warning("Enter a name."); st.stop()
         if name in st.session_state.meds: st.warning("Name exists. Edit instead."); st.stop()
         st.session_state.meds[name]={"doses":new_times,"note":note,"days":sel_days or WEEKDAYS}
-        st.success(f"Added {name}"); st.experimental_rerun()
+        st.success(f"Added {name}") 
+        st.experimental_rerun()
 
 # --- Edit Medicine ---
 else:
