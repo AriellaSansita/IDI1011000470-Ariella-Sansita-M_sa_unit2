@@ -1,5 +1,4 @@
 
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -46,6 +45,15 @@ if "streak" not in st.session_state:
 # ------------------------------
 # Helpers
 # ------------------------------
+def safe_rerun(*keys_to_clear):
+    """Clear widget keys from session_state to avoid rerun loops, then call st.rerun()."""
+    for k in keys_to_clear:
+        try:
+            del st.session_state[k]
+        except KeyError:
+            pass
+    st.rerun()
+
 def time_to_str(t: dt.time) -> str:
     return t.strftime("%H:%M")
 
@@ -269,7 +277,8 @@ if st.session_state.meds:
             if st.button("Delete", key=f"del_{idx}"):
                 st.session_state.meds.pop(idx)
                 st.warning("Deleted medicine")
-                st.experimental_rerun()
+                # Clear the button key to prevent rerun loop, then rerun
+                safe_rerun(f"del_{idx}")
 else:
     st.info("No medicines yet. Add your first above.")
 
