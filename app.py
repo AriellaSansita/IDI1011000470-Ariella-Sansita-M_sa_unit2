@@ -141,33 +141,33 @@ with col3: st.metric("Perfect Streak", f"{update_streak(st.session_state.history
 # -------------------------
 # Today's Checklist
 # -------------------------
-with st.expander("Today's Checklist", expanded=True):
-    today_date = today(); now_dt = now(); weekday = WEEKDAYS[today_date.weekday()]
-    scheduled_today = []
-    if st.session_state.meds:
-        for name, info in st.session_state.meds.items():
-            if weekday not in info.get("days", WEEKDAYS): continue
-            st.write(f"**{name}** — {info.get('note') or 'No note'}")
-            doses_sorted = sorted(info.get("doses", []), key=lambda s: parse_time_str(s))
-            for dose in doses_sorted:
-                ensure_history_entry(name, dose, today_date)
-                taken = get_taken(name, dose, today_date)
-                status = status_for_dose(dose, taken, now_dt)
-                c1,c2,c3 = st.columns([2.2,1.2,1.2])
-                with c1: st.write(f"⏰ {dose}")
-                with c2:
-                    if status=="taken": st.success("Taken")  # Green
-                    elif status=="upcoming": st.warning("Upcoming")  # Orange (closest to yellow)
-                    else: st.error("Missed")  # Red
-                with c3:
-                    btn_key = f"btn_{name}_{dose}_{today_date}_{'taken' if taken else 'untaken'}"
-                    if taken:
-                        if st.button("Undo", key=btn_key): set_taken(name,dose,today_date,False); st.rerun()
-                    else:
-                        if st.button("Mark taken", key=btn_key): set_taken(name,dose,today_date,True); st.rerun()
-                scheduled_today.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,today_date)})
-            st.divider()
-    else: st.info("No medicines yet. Use Add/Edit section.")
+st.header("Today's Checklist")
+today_date = today(); now_dt = now(); weekday = WEEKDAYS[today_date.weekday()]
+scheduled_today = []
+if st.session_state.meds:
+    for name, info in st.session_state.meds.items():
+        if weekday not in info.get("days", WEEKDAYS): continue
+        st.write(f"**{name}** — {info.get('note') or 'No note'}")
+        doses_sorted = sorted(info.get("doses", []), key=lambda s: parse_time_str(s))
+        for dose in doses_sorted:
+            ensure_history_entry(name, dose, today_date)
+            taken = get_taken(name, dose, today_date)
+            status = status_for_dose(dose, taken, now_dt)
+            c1,c2,c3 = st.columns([2.2,1.2,1.2])
+            with c1: st.write(f"⏰ {dose}")
+            with c2:
+                if status=="taken": st.success("Taken")  # Green
+                elif status=="upcoming": st.warning("Upcoming")  # Orange (closest to yellow)
+                else: st.error("Missed")  # Red
+            with c3:
+                btn_key = f"btn_{name}_{dose}_{today_date}_{'taken' if taken else 'untaken'}"
+                if taken:
+                    if st.button("Undo", key=btn_key): set_taken(name,dose,today_date,False); st.rerun()
+                else:
+                    if st.button("Mark taken", key=btn_key): set_taken(name,dose,today_date,True); st.rerun()
+            scheduled_today.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,today_date)})
+        st.divider()
+else: st.info("No medicines yet. Use Add/Edit section.")
 
 # -------------------------
 # Add / Edit Medicines
@@ -249,16 +249,16 @@ else:
 # -------------------------
 # PDF Export
 # -------------------------
-with st.expander("Export Weekly PDF"):
-    st.subheader("Weekly PDF Report")
-    sample_schedule=[]
-    td=today(); wd=WEEKDAYS[td.weekday()]
-    for name,info in st.session_state.meds.items():
-        if wd not in info.get("days",WEEKDAYS): continue
-        for dose in info.get("doses",[]): sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
-    pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
-    if pdf_bytes: st.download_button("Download PDF", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
-    else: st.info("PDF not available. Install reportlab.")
+st.header("Export Weekly PDF")
+st.subheader("Weekly PDF Report")
+sample_schedule=[]
+td=today(); wd=WEEKDAYS[td.weekday()]
+for name,info in st.session_state.meds.items():
+    if wd not in info.get("days",WEEKDAYS): continue
+    for dose in info.get("doses",[]): sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
+pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
+if pdf_bytes: st.download_button("Download PDF", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
+else: st.info("PDF not available. Install reportlab.")
 
 # -------------------------
 # Footer: motivation + reset
