@@ -430,3 +430,4 @@ tips = [
     "Taking medicines on time is a vote for your future self.",
     "Small habits, big impact—consistency builds confidence.",
     "You’re not alone—set gentle reminders and celebrate wins."
+]
