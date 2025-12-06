@@ -106,28 +106,22 @@ def generate_beep_wav(seconds=0.6, freq=880):
             w.writeframes(struct.pack('<h', val))
     buf.seek(0); return buf
 
-def build_report_pdf_bytes(history, meds_today):
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
-        buf = BytesIO(); c = canvas.Canvas(buf, pagesize=A4)
-        w, h = A4; y = h - 60
-        c.setFont("Helvetica-Bold", 16); c.drawString(60, y, "MedTimer – Weekly Adherence Report"); y -= 28
-        c.setFont("Helvetica", 10); c.drawString(60, y, datetime.now().strftime("Generated: %Y-%m-%d %H:%M")); y -= 18
-        score = adherence_score(history, 7); c.setFont("Helvetica-Bold", 12); c.drawString(60, y, f"7-Day Adherence: {score}%"); y -= 18
-        cutoff = today() - dt.timedelta(days=6)
-        for i in range(7):
-            d = cutoff + dt.timedelta(days=i)
-            entries = [h for h in history if h["date"] == d]; total = len(entries); taken = sum(1 for h in entries if h["taken"])
-            c.setFont("Helvetica", 10); c.drawString(60, y, f"{d}: {taken}/{total} doses taken"); y -= 14
-            if y < 80: c.showPage(); y = h - 60
-        y -= 6; c.setFont("Helvetica-Bold", 12); c.drawString(60, y, "Today's Scheduled Doses:"); y -= 16
-        for m in meds_today:
-            c.setFont("Helvetica", 10); c.drawString(60, y, f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}"); y -= 12
-            if y < 80: c.showPage(); y = h - 60
-        c.save(); buf.seek(0); return buf.getvalue()
-    except Exception:
-        return b""
+def build_report_text(history, meds_today):
+    report = "MedTimer – Weekly Adherence Report\n"
+    report += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+    score = adherence_score(history, 7)
+    report += f"7-Day Adherence: {score}%\n\n"
+    cutoff = today() - dt.timedelta(days=6)
+    for i in range(7):
+        d = cutoff + dt.timedelta(days=i)
+        entries = [h for h in history if h["date"] == d]
+        total = len(entries)
+        taken = sum(1 for h in entries if h["taken"])
+        report += f"{d}: {taken}/{total} doses taken\n"
+    report += "\nToday's Scheduled Doses:\n"
+    for m in meds_today:
+        report += f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}\n"
+    return report.encode('utf-8')
 
 # -------------------------
 # Page header / metrics
@@ -256,9 +250,8 @@ with st.expander("Export Weekly PDF"):
     for name,info in st.session_state.meds.items():
         if wd not in info.get("days",WEEKDAYS): continue
         for dose in info.get("doses",[]): sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
-    pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
-    if pdf_bytes: st.download_button("Download PDF", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
-    else: st.info("PDF not available. Install reportlab.")
+    report_text = build_report_text(st.session_state.history, sample_schedule)
+    st.download_button("Download Report", report_text, file_name="MedTimer_Report.txt", mime="text/plain")
 
 # -------------------------
 # Footer: motivation + reset
@@ -277,4 +270,3 @@ with cols[1]:
     if st.button("Reset all data"):
         st.session_state.meds={}; st.session_state.history=[]; st.session_state.streak=0
         st.success("All data cleared"); st.rerun()
-
