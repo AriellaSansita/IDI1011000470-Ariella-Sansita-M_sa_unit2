@@ -156,9 +156,9 @@ with st.expander("Today's Checklist", expanded=True):
                 c1,c2,c3 = st.columns([2.2,1.2,1.2])
                 with c1: st.write(f"⏰ {dose}")
                 with c2:
-                    if status=="taken": st.success("Taken")
-                    elif status=="upcoming": st.info("Upcoming")
-                    else: st.warning("Missed")
+                    if status=="taken": st.success("Taken")  # Green
+                    elif status=="upcoming": st.warning("Upcoming")  # Orange (closest to yellow)
+                    else: st.error("Missed")  # Red
                 with c3:
                     btn_key = f"btn_{name}_{dose}_{today_date}_{'taken' if taken else 'untaken'}"
                     if taken:
