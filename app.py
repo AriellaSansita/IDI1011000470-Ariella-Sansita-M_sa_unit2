@@ -26,7 +26,7 @@ st.markdown(
 if "meds" not in st.session_state or not isinstance(st.session_state.meds, dict):
     st.session_state.meds = {}
 if "history" not in st.session_state:
-    st.session_state.history = []  # {"date": date, "name": str, "dose_time": "HH:MM", "taken": bool}
+    st.session_state.history = []
 if "streak" not in st.session_state:
     st.session_state.streak = 0
 
@@ -166,7 +166,6 @@ with st.expander("Today's Checklist", expanded=True):
             if weekday not in info.get("days", WEEKDAYS):
                 continue
             st.markdown(f"**{name}** — {info.get('note') or 'No note'}")
-            # sort doses by time for better UX
             doses_sorted = sorted(info.get("doses", []), key=lambda s: parse_time_str(s))
             for dose in doses_sorted:
                 ensure_history_entry(name, dose, today_date)
@@ -174,131 +173,125 @@ with st.expander("Today's Checklist", expanded=True):
                 status = status_for_dose(dose, taken, now_dt)
                 label = {"taken": "green", "upcoming": "yellow", "missed": "red"}[status]
                 c1, c2, c3 = st.columns([2.2, 1.2, 1.2])
-                with c1:
-                    st.write(f"⏰ {dose}")
-                with c2:
-                    st.markdown(f"<span class='pill {label}'>{status.capitalize()}</span>", unsafe_allow_html=True)
+                with c1: st.write(f"⏰ {dose}")
+                with c2: st.markdown(f"<span class='pill {label}'>{status.capitalize()}</span>", unsafe_allow_html=True)
                 with c3:
                     btn_key = f"btn_{name}_{dose}_{today_date}"
                     if taken:
                         if st.button("Undo", key=btn_key):
-                            set_taken(name, dose, today_date, False)
-                            st.rerun()
+                            set_taken(name, dose, today_date, False); st.rerun()
                     else:
                         if st.button("Mark taken", key=btn_key):
-                            set_taken(name, dose, today_date, True)
-                            st.rerun()
+                            set_taken(name, dose, today_date, True); st.rerun()
                 scheduled_today.append({"name": name, "dose_time": dose, "taken": get_taken(name, dose, today_date)})
             st.divider()
     else:
-        st.info("No medicines yet. Expand 'Add Medicine' to create one.")
+        st.info("No medicines yet. Use Add/Edit section to create one.")
 
-    # Adherence mini-panel inside expander
+    # Mini adherence
     col_a, col_b = st.columns([1, 2])
     with col_a:
         today_taken = sum(1 for h in st.session_state.history if h["date"] == today_date and h["taken"])
         today_total = sum(1 for h in st.session_state.history if h["date"] == today_date)
         st.metric("Today's Doses", f"{today_taken}/{today_total}")
     with col_b:
-        if score >= 85:
-            st.success("Fantastic adherence! 💪")
-        elif score >= 60:
-            st.info("You're on track.")
-        else:
-            st.warning("Let's build momentum — small steps!")
+        if score >= 85: st.success("Fantastic adherence! 💪")
+        elif score >= 60: st.info("You're on track.")
+        else: st.warning("Let's build momentum — small steps!")
 
-    # Turtle mascot when high adherence
     if score >= 85:
         img = draw_turtle_image()
-        if img:
-            st.image(img, caption="Turtle Trophy")
+        if img: st.image(img, caption="Turtle Trophy")
 
-    # Beep if missed or imminent
     imminent = False
     for h in st.session_state.history:
         if h["date"] != today_date or h["taken"]: continue
         med_dt = dt.datetime.combine(today_date, parse_time_str(h["dose_time"]))
         if med_dt < now_dt or (med_dt - now_dt) <= dt.timedelta(minutes=5):
             imminent = True; break
-    if imminent:
-        st.audio(generate_beep_wav(), format="audio/wav")
+    if imminent: st.audio(generate_beep_wav(), format="audio/wav")
 
-# -------------------------
-# Expander: Add Medicine
-# -------------------------
-with st.expander("Add Medicine", expanded=False):
-    st.subheader("Add Medicine")
-    presets = ["Custom Add", "Paracetamol", "Aspirin", "Ibuprofen", "Amoxicillin", "Vitamin D", "Iron", "Zinc"]
-    preset_choice = st.selectbox("Choose medicine (or Custom Add)", presets, index=0)
-    if preset_choice == "Custom Add":
-        name = st.text_input("Medicine name", key="add_name")
-    else:
-        name = preset_choice
-        st.markdown(f"<div class='muted'>Preset: <strong>{name}</strong></div>", unsafe_allow_html=True)
-    note = st.text_input("Note (optional)", key="add_note")
-    freq = st.number_input("Times per day", min_value=1, max_value=8, value=1, step=1, key="add_freq")
-    st.write("Dose times:")
+# =========================
+# SECTION 2 – ADD / EDIT
+# =========================
+st.header("Add / Edit Medicines")
+
+mode = st.radio("Mode", ["Add", "Edit"])
+
+if mode == "Add":
+    name = st.text_input("Medicine name")
+    note = st.text_input("Note")
+    freq = st.number_input("How many times per day?", min_value=1, max_value=10, value=1)
+
+    st.write("Enter dose times:")
     new_times = []
     for i in range(freq):
-        t = st.time_input(f"Dose {i+1}", value=default_time_for_index(i), key=f"add_time_{i}")
-        new_times.append(time_to_str(t))
-    st.write("Repeat on days:")
-    cols = st.columns(7); sel_days = []
-    for i, d in enumerate(WEEKDAYS):
-        if cols[i].checkbox(d, value=True, key=f"add_day_{d}"): sel_days.append(d)
-    if st.button("Add medicine"):
-        if not name or not name.strip():
-            st.warning("Please enter a medicine name.")
-        elif name in st.session_state.meds:
-            st.warning("A medicine with this name already exists. Use Edit to modify.")
-        else:
-            st.session_state.meds[name] = {"doses": new_times, "note": note, "days": sel_days or WEEKDAYS}
-            st.success(f"Added {name}.")
-            st.rerun()
+        tm = st.time_input(f"Dose {i+1}", value=datetime.strptime("08:00","%H:%M").time(), key=f"add_time_{i}")
+        new_times.append(tm.strftime("%H:%M"))
 
-# -------------------------
-# Expander: Edit / Delete
-# -------------------------
-with st.expander("Edit / Delete Medicines", expanded=False):
-    st.subheader("Edit or Delete")
-    meds_list = list(st.session_state.meds.keys())
-    if not meds_list:
-        st.info("No medicines to edit. Add some first.")
-    else:
-        sel = st.selectbox("Select medicine", meds_list, key="edit_select")
-        info = st.session_state.meds.get(sel, {"doses": ["08:00"], "note": "", "days": WEEKDAYS})
-        new_name = st.text_input("Name", value=sel, key="edit_name")
-        new_note = st.text_input("Note", value=info.get("note", ""), key="edit_note")
-        freq = st.number_input("Times per day", min_value=1, max_value=8, value=max(1, len(info.get("doses", []))), step=1, key="edit_freq")
-        st.write("Dose times:")
+    st.write("Repeat on days:")
+    day_cols = st.columns(7)
+    selected_days = []
+    for i,d in enumerate(WEEKDAYS):
+        if day_cols[i].checkbox(d, True, key=f"add_day_{d}"):
+            selected_days.append(d)
+
+    if st.button("Add"):
+        if not name.strip():
+            st.warning("Enter a name.")
+        elif name in st.session_state.meds:
+            st.warning("Medicine already exists. Use Edit mode.")
+        else:
+            st.session_state.meds[name] = {
+                "doses": new_times,
+                "note": note,
+                "days": selected_days or WEEKDAYS
+            }
+            st.success(f"Added {name}.")
+            st.experimental_rerun()
+
+else:  # Edit mode
+    meds = list(st.session_state.meds.keys())
+    if meds:
+        target = st.selectbox("Select medicine", meds)
+        info = st.session_state.meds[target]
+
+        new_name = st.text_input("Name", target)
+        new_note = st.text_input("Note", info.get("note", ""))
+        freq = st.number_input("Times per day", min_value=1, max_value=10, value=len(info.get("doses", [])))
+
+        st.write("Edit dose times:")
         new_times = []
         for i in range(freq):
-            default = parse_time_str(info["doses"][i]) if i < len(info["doses"]) else default_time_for_index(i)
-            t = st.time_input(f"Dose {i+1}", value=default, key=f"edit_time_{i}")
-            new_times.append(time_to_str(t))
+            default = info["doses"][i] if i < len(info["doses"]) else "08:00"
+            tm = st.time_input(f"Dose {i+1}", value=datetime.strptime(default,"%H:%M").time(), key=f"edit_time_{i}")
+            new_times.append(tm.strftime("%H:%M"))
+
         st.write("Repeat on days:")
-        cols = st.columns(7); new_days = []; existing = set(info.get("days", WEEKDAYS))
-        for i, d in enumerate(WEEKDAYS):
-            if cols[i].checkbox(d, value=(d in existing), key=f"edit_day_{d}"): new_days.append(d)
-        c1, c2 = st.columns([1, 2])
-        with c2:
-            if st.button("Save changes"):
-                if new_name != sel and new_name in st.session_state.meds:
-                    st.warning("Another medicine already has that name.")
-                else:
-                    if new_name != sel:
-                        for h in st.session_state.history:
-                            if h["name"] == sel:
-                                h["name"] = new_name
-                    st.session_state.meds.pop(sel, None)
-                    st.session_state.meds[new_name] = {"doses": new_times, "note": new_note, "days": new_days or WEEKDAYS}
-                    st.success("Saved.")
-                    st.rerun()
-        with c1:
-            if st.button("Delete medicine"):
-                st.session_state.meds.pop(sel, None)
-                st.warning("Deleted.")
-                st.rerun()
+        cols = st.columns(7)
+        new_days = []
+        for i,d in enumerate(WEEKDAYS):
+            if cols[i].checkbox(d, d in info.get("days", WEEKDAYS), key=f"edit_day_{d}"):
+                new_days.append(d)
+
+        if st.button("Save changes"):
+            if new_name != target and new_name in st.session_state.meds:
+                st.warning("Another medicine already has that name.")
+            else:
+                if new_name != target:
+                    for h in st.session_state.history:
+                        if h["name"] == target:
+                            h["name"] = new_name
+                    st.session_state.meds.pop(target)
+                st.session_state.meds[new_name] = {
+                    "doses": new_times,
+                    "note": new_note,
+                    "days": new_days or WEEKDAYS
+                }
+                st.success("Saved.")
+                st.experimental_rerun()
+    else:
+        st.info("No medicines available. Switch to Add mode to create one.")
 
 # -------------------------
 # Expander: Export PDF
@@ -338,4 +331,4 @@ with cols[1]:
         st.session_state.history = []
         st.session_state.streak = 0
         st.success("All data cleared.")
-        st.rerun()
+        st.experimental_rerun()
