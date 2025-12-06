@@ -108,33 +108,24 @@ def generate_beep_wav(seconds=0.6, freq=880):
 
 def build_report_pdf_bytes(history, meds_today):
     try:
-        from fpdf import FPDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, txt="MedTimer – Weekly Adherence Report", ln=True, align='C')
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 10, txt=datetime.now().strftime("Generated: %Y-%m-%d %H:%M"), ln=True)
-        score = adherence_score(history, 7)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt=f"7-Day Adherence: {score}%", ln=True)
-        pdf.set_font("Arial", size=10)
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        buf = BytesIO(); c = canvas.Canvas(buf, pagesize=A4)
+        w, h = A4; y = h - 60
+        c.setFont("Helvetica-Bold", 16); c.drawString(60, y, "MedTimer – Weekly Adherence Report"); y -= 28
+        c.setFont("Helvetica", 10); c.drawString(60, y, datetime.now().strftime("Generated: %Y-%m-%d %H:%M")); y -= 18
+        score = adherence_score(history, 7); c.setFont("Helvetica-Bold", 12); c.drawString(60, y, f"7-Day Adherence: {score}%"); y -= 18
         cutoff = today() - dt.timedelta(days=6)
         for i in range(7):
             d = cutoff + dt.timedelta(days=i)
-            entries = [h for h in history if h["date"] == d]
-            total = len(entries)
-            taken = sum(1 for h in entries if h["taken"])
-            pdf.cell(200, 10, txt=f"{d}: {taken}/{total} doses taken", ln=True)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(200, 10, txt="Today's Scheduled Doses:", ln=True)
-        pdf.set_font("Arial", size=10)
+            entries = [h for h in history if h["date"] == d]; total = len(entries); taken = sum(1 for h in entries if h["taken"])
+            c.setFont("Helvetica", 10); c.drawString(60, y, f"{d}: {taken}/{total} doses taken"); y -= 14
+            if y < 80: c.showPage(); y = h - 60
+        y -= 6; c.setFont("Helvetica-Bold", 12); c.drawString(60, y, "Today's Scheduled Doses:"); y -= 16
         for m in meds_today:
-            pdf.cell(200, 10, txt=f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}", ln=True)
-        buf = BytesIO()
-        pdf.output(buf)
-        buf.seek(0)
-        return buf.getvalue()
+            c.setFont("Helvetica", 10); c.drawString(60, y, f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}"); y -= 12
+            if y < 80: c.showPage(); y = h - 60
+        c.save(); buf.seek(0); return buf.getvalue()
     except Exception:
         return b""
 
@@ -267,7 +258,7 @@ with st.expander("Export Weekly PDF"):
         for dose in info.get("doses",[]): sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
     pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
     if pdf_bytes: st.download_button("Download PDF", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
-    else: st.info("PDF not available. Install fpdf.")
+    else: st.info("PDF not available. Install reportlab.")
 
 # -------------------------
 # Footer: motivation + reset
