@@ -247,29 +247,27 @@ else:
     else: st.info("No medicines available. Switch to Add mode.")
 
 # -------------------------
-# Adherence Mood Indicator
+# Adherence Mood Indicator (Senior-Friendly)
 # -------------------------
-
-st.header("How Your Health Buddy Feels Today")
+st.header("Your Daily Well-Being Check 😊")
 
 score = adherence_score(st.session_state.history, 7)
 
 if score == 0:
-    st.info("Your buddy is waiting for you to take the first step 🐣")
+    st.info("🌿 Let's begin today with a small step. Your health matters, one dose at a time.")
 
 elif score <= 25:
-    st.error("😢 Your buddy is a little sad. Try taking more doses today!")
-    
+    st.warning("☹️ Your health buddy is a bit concerned.\n\n“Even small progress is still progress.”")
+
 elif score <= 50:
-    st.warning("😐 Your buddy feels okay… but you can do better!")
+    st.warning("😐 You're getting there.\n\n“Staying consistent makes tomorrow easier.”")
 
 elif score <= 75:
-    st.success("🙂 Your buddy is smiling! Keep going!")
+    st.success("🙂 Good work!\n\n“Every dose you take is a gift to your future self.”")
 
 else:  # 76–100%
-    st.success("😄 Your buddy is SUPER happy! Great adherence!")
+    st.success("😊 Wonderful consistency!\n\n“Your commitment is keeping you strong every day.”")
     st.balloons()
-
 
 # -------------------------
 # PDF Export
