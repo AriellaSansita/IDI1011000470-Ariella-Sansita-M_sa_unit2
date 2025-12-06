@@ -157,6 +157,7 @@ if mode=="Add":
             st.experimental_rerun()
 
 # --- Edit Medicine ---
+# --- Edit Medicine ---
 else:
     meds=list(st.session_state.meds.keys())
     if meds:
@@ -189,11 +190,16 @@ else:
         with c1:
             delete_clicked = st.button("Delete Medicine")
             if delete_clicked:
+                # Do NOT call st.experimental_rerun() here
                 st.session_state.meds.pop(target,None)
                 st.session_state.just_deleted = target
-                st.experimental_rerun()
-    else:
-        st.info("No medicines to edit. Switch to Add.")
+
+# --- Show delete message and rerun safely ---
+if st.session_state.just_deleted:
+    st.warning(f"Deleted {st.session_state.just_deleted}")
+    st.session_state.just_deleted = None
+    st.experimental_rerun()
+
 
 # --- Today's Checklist ---
 st.subheader("Today's Checklist")
