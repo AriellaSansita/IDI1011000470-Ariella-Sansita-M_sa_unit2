@@ -237,14 +237,15 @@ else:
                     st.session_state.meds.pop(target)
                 st.session_state.meds[new_name]={"doses":new_times,"note":new_note,"days":new_days or WEEKDAYS}
                 st.success("Saved"); st.rerun()
-    else: st.info("No medicines available. Switch to Add mode.")
 
-     if st.button("Delete Medicine", key=f"delete_{target}"):
+        # Added delete button
+        if st.button("Delete Medicine", key=f"delete_{target}"):
             del st.session_state.meds[target]
             st.session_state.history = [h for h in st.session_state.history if h["name"] != target]
             st.success(f"Deleted {target}")
             st.rerun()
     else: st.info("No medicines available. Switch to Add mode.")
+
 # -------------------------
 # PDF Export
 # -------------------------
