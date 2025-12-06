@@ -247,41 +247,28 @@ else:
     else: st.info("No medicines available. Switch to Add mode.")
 
 # -------------------------
-# Turtle Motivation Based on Adherence %
+# Adherence Mood Indicator
 # -------------------------
-st.header("Turtle Motivation 🐢")
+
+st.header("How Your Health Buddy Feels Today")
 
 score = adherence_score(st.session_state.history, 7)
-turtle_img = draw_turtle_image()
 
 if score == 0:
-    st.info("Start taking your medicines to meet your turtle 🐢")
+    st.info("Your buddy is waiting for you to take the first step 🐣")
 
 elif score <= 25:
-    st.warning("You're getting started! Your turtle believes in you 🐢✨")
-    if turtle_img:
-        st.image(turtle_img, width=140)
-
+    st.error("😢 Your buddy is a little sad. Try taking more doses today!")
+    
 elif score <= 50:
-    st.info("Halfway there! Your turtle is cheering for you 💚🐢")
-    if turtle_img:
-        st.image(turtle_img, width=160)
+    st.warning("😐 Your buddy feels okay… but you can do better!")
 
 elif score <= 75:
-    st.success("Great progress! Your turtle is proud 🐢💚")
-    if turtle_img:
-        st.image(turtle_img, width=180)
+    st.success("🙂 Your buddy is smiling! Keep going!")
 
-elif score < 100:
-    st.success("Almost perfect! Your turtle is dancing for you 🎉🐢")
-    if turtle_img:
-        st.image(turtle_img, width=200)
-
-else:  # score == 100
+else:  # 76–100%
+    st.success("😄 Your buddy is SUPER happy! Great adherence!")
     st.balloons()
-    st.success("Perfect adherence! Your turtle gives you a GOLD TROPHY 🏆🐢💚")
-    if turtle_img:
-        st.image(turtle_img, width=220)
 
 
 # -------------------------
