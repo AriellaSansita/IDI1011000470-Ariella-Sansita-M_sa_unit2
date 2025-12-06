@@ -106,22 +106,37 @@ def generate_beep_wav(seconds=0.6, freq=880):
             w.writeframes(struct.pack('<h', val))
     buf.seek(0); return buf
 
-def build_report_text(history, meds_today):
-    report = "MedTimer – Weekly Adherence Report\n"
-    report += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-    score = adherence_score(history, 7)
-    report += f"7-Day Adherence: {score}%\n\n"
-    cutoff = today() - dt.timedelta(days=6)
-    for i in range(7):
-        d = cutoff + dt.timedelta(days=i)
-        entries = [h for h in history if h["date"] == d]
-        total = len(entries)
-        taken = sum(1 for h in entries if h["taken"])
-        report += f"{d}: {taken}/{total} doses taken\n"
-    report += "\nToday's Scheduled Doses:\n"
-    for m in meds_today:
-        report += f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}\n"
-    return report.encode('utf-8')
+def build_report_pdf_bytes(history, meds_today):
+    try:
+        from fpdf import FPDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", 'B', 16)
+        pdf.cell(200, 10, txt="MedTimer – Weekly Adherence Report", ln=True, align='C')
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 10, txt=datetime.now().strftime("Generated: %Y-%m-%d %H:%M"), ln=True)
+        score = adherence_score(history, 7)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt=f"7-Day Adherence: {score}%", ln=True)
+        pdf.set_font("Arial", size=10)
+        cutoff = today() - dt.timedelta(days=6)
+        for i in range(7):
+            d = cutoff + dt.timedelta(days=i)
+            entries = [h for h in history if h["date"] == d]
+            total = len(entries)
+            taken = sum(1 for h in entries if h["taken"])
+            pdf.cell(200, 10, txt=f"{d}: {taken}/{total} doses taken", ln=True)
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(200, 10, txt="Today's Scheduled Doses:", ln=True)
+        pdf.set_font("Arial", size=10)
+        for m in meds_today:
+            pdf.cell(200, 10, txt=f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}", ln=True)
+        buf = BytesIO()
+        pdf.output(buf)
+        buf.seek(0)
+        return buf.getvalue()
+    except Exception:
+        return b""
 
 # -------------------------
 # Page header / metrics
@@ -250,8 +265,9 @@ with st.expander("Export Weekly PDF"):
     for name,info in st.session_state.meds.items():
         if wd not in info.get("days",WEEKDAYS): continue
         for dose in info.get("doses",[]): sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
-    report_text = build_report_text(st.session_state.history, sample_schedule)
-    st.download_button("Download Report", report_text, file_name="MedTimer_Report.txt", mime="text/plain")
+    pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
+    if pdf_bytes: st.download_button("Download PDF", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
+    else: st.info("PDF not available. Install fpdf.")
 
 # -------------------------
 # Footer: motivation + reset
