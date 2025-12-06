@@ -162,9 +162,9 @@ with st.expander("Today's Checklist", expanded=True):
                 with c3:
                     btn_key = f"btn_{name}_{dose}_{today_date}"
                     if taken:
-                        if st.button("Undo", key=btn_key): set_taken(name,dose,today_date,False); st.experimental_rerun()
+                        if st.button("Undo", key=btn_key): set_taken(name,dose,today_date,False); st.rerun()
                     else:
-                        if st.button("Mark taken", key=btn_key): set_taken(name,dose,today_date,True); st.experimental_rerun()
+                        if st.button("Mark taken", key=btn_key): set_taken(name,dose,today_date,True); st.rerun()
                 scheduled_today.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,today_date)})
             st.divider()
     else: st.info("No medicines yet. Use Add/Edit section.")
@@ -205,7 +205,7 @@ if mode=="Add":
         elif name in st.session_state.meds: st.warning("Medicine exists. Use Edit.")
         else:
             st.session_state.meds[name]={"doses":new_times,"note":note,"days":selected_days or WEEKDAYS}
-            st.success(f"Added {name}"); st.experimental_rerun()
+            st.success(f"Added {name}"); st.rerun()
 else:
     meds=list(st.session_state.meds.keys())
     if meds:
@@ -236,7 +236,7 @@ else:
                         if h["name"]==target: h["name"]=new_name
                     st.session_state.meds.pop(target)
                 st.session_state.meds[new_name]={"doses":new_times,"note":new_note,"days":new_days or WEEKDAYS}
-                st.success("Saved"); st.experimental_rerun()
+                st.success("Saved"); st.rerun()
     else: st.info("No medicines available. Switch to Add mode.")
 
 # -------------------------
@@ -269,5 +269,5 @@ with cols[1]:
     st.markdown("#### Data")
     if st.button("Reset all data"):
         st.session_state.meds={}; st.session_state.history=[]; st.session_state.streak=0
-        st.success("All data cleared"); st.experimental_rerun()
+        st.success("All data cleared"); st.rerun()
 
