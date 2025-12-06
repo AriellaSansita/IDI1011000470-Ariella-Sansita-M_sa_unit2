@@ -7,7 +7,7 @@ import math, wave, struct
 # -------------------------
 # Page config
 # -------------------------
-st.set_page_config("MedTimer – Daily Medicine Companion", "💊", layout="wide")
+st.set_page_config("MedTimer", "💊", layout="wide")
 
 # -------------------------
 # Session state init
@@ -132,7 +132,7 @@ def build_report_pdf_bytes(history, meds_today):
 # -------------------------
 # Page header / metrics
 # -------------------------
-st.title("MedTimer — Python Only")
+st.title("MedTimer")
 col1, col2, col3 = st.columns([2,1,1])
 with col1: st.markdown("### Today")
 with col2: st.metric("7-Day Adherence", f"{adherence_score(st.session_state.history,7)}%")
