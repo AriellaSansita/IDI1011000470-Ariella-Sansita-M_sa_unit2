@@ -265,4 +265,4 @@ if st.session_state.meds:
         st.write(f"Days: {', '.join(info['days'])}")
         st.write("---")
 else:
-    st.info("No medicines yet.") 
+    st.info("No medicines yet")
