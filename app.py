@@ -127,7 +127,6 @@ mode=st.radio("Mode",["Add","Edit"],key="mode")
 
 # --- Add Medicine ---
 if mode=="Add":
-    # Custom Add
     med_choice=st.selectbox("Choose medicine or type your own",["--Custom--"]+CUSTOM_MED_LIST)
     name_text=st.text_input("If custom, type medicine name",key="custom_name")
     name=name_text if med_choice=="--Custom--" else med_choice
@@ -138,7 +137,7 @@ if mode=="Add":
     for i in range(freq):
         t=st.time_input(f"Dose {i+1}",value=default_time_for_index(i),key=f"add_time_{i}")
         new_times.append(time_to_str(t))
-    sel_days=[d for d in WEEKDAYS if st.checkbox(d,value=True,key=f"add_day_{d}")]
+    sel_days=st.multiselect("Select Days", WEEKDAYS, default=WEEKDAYS)
     if st.button("Add Medicine"):
         if not name.strip(): st.warning("Enter a name."); st.stop()
         if name in st.session_state.meds: st.warning("Name exists. Edit instead."); st.stop()
@@ -159,7 +158,7 @@ else:
             default=parse_time_str(info["doses"][i]) if i<len(info.get("doses",[])) else default_time_for_index(i)
             t=st.time_input(f"Dose {i+1}",value=default,key=f"edit_time_{i}")
             new_times.append(time_to_str(t))
-        new_days=[d for d in WEEKDAYS if st.checkbox(d,d in info.get("days",WEEKDAYS),key=f"edit_day_{d}")]
+        new_days=st.multiselect("Select Days", WEEKDAYS, default=info.get("days", WEEKDAYS))
         c1,c2=st.columns([1,2])
         with c2:
             if st.button("Save Changes"):
@@ -245,14 +244,19 @@ tips=[
 ]
 st.info(tips[datetime.now().day%len(tips)])
 
-# --- Display All Medicines Info ---
+# --- Display All Medicines Info (with today taken/missed) ---
 st.subheader("All Medicines")
 if st.session_state.meds:
-    for m,info in st.session_state.meds.items():
+    for m, info in st.session_state.meds.items():
         st.write(f"### {m}")
         st.write(f"Times: {', '.join(info['doses'])}")
         st.write(f"Note: {info['note']}")
         st.write(f"Days: {', '.join(info['days'])}")
+        today_taken_list=[]
+        for dose in info['doses']:
+            taken=get_taken(m,dose,today())
+            today_taken_list.append(f"{dose}: {'Taken' if taken else 'Missed'}")
+        st.write("Today's doses:", ", ".join(today_taken_list))
         st.write("---")
 else:
     st.info("No medicines yet.")
