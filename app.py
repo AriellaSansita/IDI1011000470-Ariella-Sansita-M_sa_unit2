@@ -141,7 +141,7 @@ with col3: st.metric("Perfect Streak", f"{update_streak(st.session_state.history
 # -------------------------
 # Today's Checklist
 # -------------------------
-with st.header("Today’s Checklist"):
+with st.expander("Today's Checklist", expanded=True):
     today_date = today(); now_dt = now(); weekday = WEEKDAYS[today_date.weekday()]
     scheduled_today = []
     if st.session_state.meds:
@@ -249,7 +249,7 @@ else:
 # -------------------------
 # PDF Export
 # -------------------------
-with st.header("Export Weekly PDF"):
+with st.expander("Export Weekly PDF"):
     st.subheader("Weekly PDF Report")
     sample_schedule=[]
     td=today(); wd=WEEKDAYS[td.weekday()]
