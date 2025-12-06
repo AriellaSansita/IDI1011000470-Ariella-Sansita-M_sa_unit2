@@ -160,7 +160,7 @@ with st.expander("Today's Checklist", expanded=True):
                     elif status=="upcoming": st.info("Upcoming")
                     else: st.warning("Missed")
                 with c3:
-                    btn_key = f"btn_{name}_{dose}_{today_date}"
+                    btn_key = f"btn_{name}_{dose}_{today_date}_{'taken' if taken else 'untaken'}"
                     if taken:
                         if st.button("Undo", key=btn_key): set_taken(name,dose,today_date,False); st.rerun()
                     else:
