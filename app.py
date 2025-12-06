@@ -11,6 +11,12 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "streak" not in st.session_state:
     st.session_state.streak = 0
+if "just_added" not in st.session_state:
+    st.session_state.just_added = None
+if "just_saved" not in st.session_state:
+    st.session_state.just_saved = None
+if "just_deleted" not in st.session_state:
+    st.session_state.just_deleted = None
 
 WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 CUSTOM_MED_LIST = ["Aspirin", "Paracetamol", "Vitamin C", "Ibuprofen", "Amoxicillin", "Cetirizine", "Metformin"]
@@ -73,15 +79,6 @@ def update_streak(history):
         else: break
     return s
 
-def draw_trophy_image():
-    try:
-        from PIL import Image, ImageDraw
-        img=Image.new("RGB",(300,300),"white"); d=ImageDraw.Draw(img)
-        d.rectangle([90,100,210,160],fill="#FFD700"); d.ellipse([60,100,120,160],fill="#FFD700"); d.ellipse([180,100,240,160],fill="#FFD700")
-        d.rectangle([140,160,160,230],fill="#DAA520"); d.rectangle([110,230,190,250],fill="#8B4513")
-        return img
-    except: return None
-
 def generate_beep_wav(seconds=0.6,freq=880):
     framerate=44100; nframes=int(seconds*framerate); buf=BytesIO()
     with wave.open(buf,'wb') as w:
@@ -113,6 +110,17 @@ def build_report_pdf_bytes(history, meds_today):
         c.save(); buf.seek(0); return buf.getvalue()
     except: return b""
 
+# --- Display messages from previous actions ---
+if st.session_state.just_added:
+    st.success(f"Added {st.session_state.just_added}")
+    st.session_state.just_added = None
+if st.session_state.just_saved:
+    st.success(f"Saved {st.session_state.just_saved}")
+    st.session_state.just_saved = None
+if st.session_state.just_deleted:
+    st.warning(f"Deleted {st.session_state.just_deleted}")
+    st.session_state.just_deleted = None
+
 # --- Header ---
 col1,col2=st.columns([2,1])
 with col1:
@@ -138,12 +146,15 @@ if mode=="Add":
         t=st.time_input(f"Dose {i+1}",value=default_time_for_index(i),key=f"add_time_{i}")
         new_times.append(time_to_str(t))
     sel_days=st.multiselect("Select Days", WEEKDAYS, default=WEEKDAYS)
-    if st.button("Add Medicine"):
-        if not name.strip(): st.warning("Enter a name."); st.stop()
-        if name in st.session_state.meds: st.warning("Name exists. Edit instead."); st.stop()
-        st.session_state.meds[name]={"doses":new_times,"note":note,"days":sel_days or WEEKDAYS}
-        st.success(f"Added {name}") 
-        st.experimental_rerun()
+
+    add_clicked = st.button("Add Medicine")
+    if add_clicked:
+        if not name.strip(): st.warning("Enter a name")
+        elif name in st.session_state.meds: st.warning("Name exists. Edit instead")
+        else:
+            st.session_state.meds[name]={"doses":new_times,"note":note,"days":sel_days or WEEKDAYS}
+            st.session_state.just_added = name
+            st.experimental_rerun()
 
 # --- Edit Medicine ---
 else:
@@ -160,21 +171,27 @@ else:
             t=st.time_input(f"Dose {i+1}",value=default,key=f"edit_time_{i}")
             new_times.append(time_to_str(t))
         new_days=st.multiselect("Select Days", WEEKDAYS, default=info.get("days", WEEKDAYS))
+
         c1,c2=st.columns([1,2])
         with c2:
-            if st.button("Save Changes"):
-                if new_name!=target and new_name in st.session_state.meds:
-                    st.warning("Another medicine has that name"); st.stop()
-                if new_name!=target:
-                    for h in st.session_state.history:
-                        if h["name"]==target: h["name"]=new_name
-                st.session_state.meds.pop(target,None)
-                st.session_state.meds[new_name]={"doses":new_times,"note":new_note,"days":new_days or WEEKDAYS}
-                st.success("Saved"); st.experimental_rerun()
+            save_clicked = st.button("Save Changes")
+            if save_clicked:
+                if new_name != target and new_name in st.session_state.meds:
+                    st.warning("Another medicine has that name")
+                else:
+                    if new_name != target:
+                        for h in st.session_state.history:
+                            if h["name"]==target: h["name"]=new_name
+                    st.session_state.meds.pop(target,None)
+                    st.session_state.meds[new_name]={"doses":new_times,"note":new_note,"days":new_days or WEEKDAYS}
+                    st.session_state.just_saved = new_name
+                    st.experimental_rerun()
         with c1:
-            if st.button("Delete Medicine"):
+            delete_clicked = st.button("Delete Medicine")
+            if delete_clicked:
                 st.session_state.meds.pop(target,None)
-                st.warning("Deleted"); st.experimental_rerun()
+                st.session_state.just_deleted = target
+                st.experimental_rerun()
     else:
         st.info("No medicines to edit. Switch to Add.")
 
@@ -192,11 +209,13 @@ if st.session_state.meds:
             status=status_for_dose(dose,taken,now_dt)
             col1,col2,col3=st.columns([1,1,1])
             with col1:
-                if st.button(f"{dose} — {status}",key=f"{name}_{dose}"):
+                btn_key=f"{name}_{dose}_check"
+                if st.button(f"{dose} — {status}",key=btn_key):
                     set_taken(name,dose,today_date,not taken)
                     st.experimental_rerun()
             with col2:
-                if st.button("Edit",key=f"edit_{name}_{dose}"):
+                edit_key=f"{name}_{dose}_edit"
+                if st.button("Edit",key=edit_key):
                     st.warning("Use Edit mode above to change doses or times")
             scheduled_today.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,today_date)})
         st.write("---")
@@ -261,3 +280,4 @@ if st.session_state.meds:
         st.write("---")
 else:
     st.info("No medicines yet.")
+
