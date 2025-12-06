@@ -247,6 +247,44 @@ else:
     else: st.info("No medicines available. Switch to Add mode.")
 
 # -------------------------
+# Turtle Motivation Based on Adherence %
+# -------------------------
+st.header("Turtle Motivation 🐢")
+
+score = adherence_score(st.session_state.history, 7)
+turtle_img = draw_turtle_image()
+
+if score == 0:
+    st.info("Start taking your medicines to meet your turtle 🐢")
+
+elif score <= 25:
+    st.warning("You're getting started! Your turtle believes in you 🐢✨")
+    if turtle_img:
+        st.image(turtle_img, width=140)
+
+elif score <= 50:
+    st.info("Halfway there! Your turtle is cheering for you 💚🐢")
+    if turtle_img:
+        st.image(turtle_img, width=160)
+
+elif score <= 75:
+    st.success("Great progress! Your turtle is proud 🐢💚")
+    if turtle_img:
+        st.image(turtle_img, width=180)
+
+elif score < 100:
+    st.success("Almost perfect! Your turtle is dancing for you 🎉🐢")
+    if turtle_img:
+        st.image(turtle_img, width=200)
+
+else:  # score == 100
+    st.balloons()
+    st.success("Perfect adherence! Your turtle gives you a GOLD TROPHY 🏆🐢💚")
+    if turtle_img:
+        st.image(turtle_img, width=220)
+
+
+# -------------------------
 # PDF Export
 # -------------------------
 st.header("Export Weekly PDF")
