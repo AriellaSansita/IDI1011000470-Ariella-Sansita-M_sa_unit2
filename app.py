@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -138,44 +137,10 @@ def update_streak(history: list) -> int:
     return streak
 
 # ------------------------------
-# Turtle or Pillow trophy
+# Trophy (Pillow only, in-memory)
 # ------------------------------
-def draw_trophy_png(output_path: str = "turtle_award.png") -> str:
-    """Try Turtle export; fallback to Pillow."""
-    try:
-        import turtle
-        screen = turtle.Screen()
-        screen.setup(width=400, height=400)
-        t = turtle.Turtle()
-        t.hideturtle(); t.speed(0); t.color("gold"); t.pensize(5)
-        t.up(); t.goto(-80, 50); t.down()
-        t.begin_fill()
-        for _ in range(2):
-            t.forward(160); t.circle(40, 90); t.forward(160); t.circle(40, 90)
-        t.end_fill()
-        t.up(); t.goto(-120, 120); t.down(); t.circle(40)  # left handle
-        t.up(); t.goto(120, 120); t.down(); t.circle(40)   # right handle
-        t.up(); t.goto(0, 50); t.setheading(-90); t.down()
-        t.begin_fill()
-        t.forward(80); t.left(90); t.forward(40); t.left(90); t.forward(20)
-        t.left(90); t.forward(80); t.left(90); t.forward(60)
-        t.end_fill()
-        canvas = screen.getcanvas()
-        ps_path = output_path.replace(".png", ".ps")
-        canvas.postscript(file=ps_path, colormode="color")
-        turtle.bye()
-        try:
-            from PIL import Image
-            img = Image.open(ps_path).convert("RGB")
-            img.save(output_path, "PNG")
-            try: os.remove(ps_path)
-            except Exception: pass
-            return output_path
-        except Exception:
-            pass
-    except Exception:
-        pass
-    # Pillow fallback
+def draw_trophy_image() -> "PIL.Image.Image":
+    """Generate trophy image using Pillow."""
     try:
         from PIL import Image, ImageDraw
         img = Image.new("RGB", (400, 400), "white")
@@ -185,15 +150,14 @@ def draw_trophy_png(output_path: str = "turtle_award.png") -> str:
         d.ellipse([260, 120, 320, 180], fill="#FFD700", outline="black")
         d.rectangle([185, 200, 215, 280], fill="#DAA520", outline="black")
         d.rectangle([140, 280, 260, 320], fill="#8B4513", outline="black")
-        img.save(output_path, "PNG")
-        return output_path
+        return img
     except Exception:
-        return ""
+        return None
 
 # ------------------------------
-# PDF report
+# PDF report (in-memory)
 # ------------------------------
-def build_report_pdf(history: list, meds_today: list, output_path: str = "MedTimer_Report.pdf") -> str:
+def build_report_pdf_bytes(history: list, meds_today: list) -> bytes:
     try:
         import fitz  # PyMuPDF
         doc = fitz.open()
@@ -225,10 +189,13 @@ def build_report_pdf(history: list, meds_today: list, output_path: str = "MedTim
         add_text("Today's Scheduled Doses:", 14)
         for m in meds_today:
             add_text(f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}")
-        doc.save(output_path)
-        return output_path
+        buf = BytesIO()
+        doc.save(buf)
+        doc.close()
+        buf.seek(0)
+        return buf.getvalue()
     except Exception:
-        return ""
+        return b""
 
 # ------------------------------
 # Header
@@ -308,6 +275,11 @@ else:
                 if new_name != target and new_name in st.session_state.meds:
                     st.warning("Another medicine already has that name. Choose a different name.")
                 else:
+                    # Update history if name changed
+                    if new_name != target:
+                        for h in st.session_state.history:
+                            if h["name"] == target:
+                                h["name"] = new_name
                     st.session_state.meds.pop(target, None)
                     st.session_state.meds[new_name] = {"doses": new_times, "note": new_note, "days": new_days}
                     st.success("Saved.")
@@ -397,9 +369,9 @@ else:
     st.warning("Let's build momentum—small steps today make a big difference.")
 
 if score >= 85:
-    img_path = draw_trophy_png()
-    if img_path and os.path.exists(img_path):
-        st.image(img_path, caption="High Adherence Award")
+    img = draw_trophy_image()
+    if img:
+        st.image(img, caption="High Adherence Award")
     else:
         st.write("(Award graphic could not be generated in this environment.)")
 
@@ -444,10 +416,9 @@ with left:
         st.caption("No items to download.")
 
 with right:
-    pdf_path = build_report_pdf(st.session_state.history, scheduled_today)
-    if pdf_path and os.path.exists(pdf_path):
-        with open(pdf_path, "rb") as f:
-            st.download_button("Download weekly adherence report (PDF)", f.read(), file_name="MedTimer_Report.pdf", mime="application/pdf")
+    pdf_bytes = build_report_pdf_bytes(st.session_state.history, scheduled_today)
+    if pdf_bytes:
+        st.download_button("Download weekly adherence report (PDF)", pdf_bytes, file_name="MedTimer_Report.pdf", mime="application/pdf")
     else:
         st.caption("PDF report unavailable in this environment.")
 
@@ -459,8 +430,4 @@ tips = [
     "Taking medicines on time is a vote for your future self.",
     "Small habits, big impact—consistency builds confidence.",
     "You’re not alone—set gentle reminders and celebrate wins.",
-    "Hydration helps—pair your dose with a glass of water.",
-]
-seed = int(dt.datetime.now().strftime("%Y%m%d"))
-np.random.seed(seed)
-st.info(np.random.choice(tips))
+    "Hyd
