@@ -3,12 +3,8 @@ import datetime as dt
 from datetime import datetime
 from io import BytesIO
 import math, wave, struct
-import turtle 
 
 st.set_page_config("MedTimer", "💊", layout="wide")
-
-# Removed st.autorefresh as it is not a standard Streamlit function.
-# If auto-refresh is needed, consider using st.rerun() in a loop or a custom timer, but it's not implemented here.
 
 # meds stores all medicines added by the user
 # Structure: Medicine Name, "doses,days
@@ -117,44 +113,6 @@ def adherence_score(history, days=7):
     taken = sum(1 for h in recent if h["taken"])
     return round(100 * taken / len(recent), 1)
 
-# Turtle graphics are used as positive reinforcement.
-# When adherence is high, a friendly turtle face is drawn
-# Note: Turtle may not work properly in web-based Streamlit deployments (e.g., Streamlit Cloud),
-# as it requires a local GUI window. For web apps, consider replacing with a static image or animation.
-
-def draw_turtle_reward():
-    screen = turtle.Screen()
-    screen.setup(400, 400)
-    screen.title("Great Job! 🐢")
-
-    t = turtle.Turtle()
-    t.hideturtle()
-    t.speed(0)
-    t.pensize(3)
-    t.color("green")
-
-    # Turtle face
-    t.penup()
-    t.goto(0, -20)
-    t.pendown()
-    t.circle(80)
-
-    # Eyes
-    for x in [-30, 30]:
-        t.penup()
-        t.goto(x, 40)
-        t.pendown()
-        t.dot(10)
-
-    # Smile
-    t.penup()
-    t.goto(-35, 10)
-    t.setheading(-60)
-    t.pendown()
-    t.circle(40, 120)
-
-    screen.exitonclick()
-
 # Generates a short audio beep to confirm a dose is marked as taken
 
 def generate_beep_wav(seconds=0.4, freq=880):
@@ -184,7 +142,7 @@ st.metric("7-Day Adherence", f"{score}%")
 if score >= 75:
     st.success("🏆 Excellent adherence!")
     if st.button("Show Reward 🐢"):
-        draw_turtle_reward()
+        st.balloons()  # Replaces turtle graphics with Streamlit's built-in celebration
 
 st.header("Today's Checklist")
 
