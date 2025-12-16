@@ -3,49 +3,59 @@ import datetime as dt
 from datetime import datetime
 from io import BytesIO
 import math, wave, struct
-import turtle  # Added for assignment requirement
+import turtle
 
-# ---------------- PAGE CONFIGURATION ----------------
 st.set_page_config("MedTimer", "💊", layout="wide")
 
-# ---------------- SESSION STATE ----------------
+st.autorefresh(interval=60000, key="auto_refresh")
+
+# meds stores all medicines added by the user
+# Structure: Medicine Name, "doses,days
 if "meds" not in st.session_state or not isinstance(st.session_state.meds, dict):
     st.session_state.meds = {}
+
+# history stores daily dose records to track adherence
+# Each entry records date, medicine name, dose time, and taken status
 if "history" not in st.session_state:
     st.session_state.history = []
-if "streak" not in st.session_state:
-    st.session_state.streak = 0
 
+# Weekday labels used for scheduling medicines
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-# ---------------- HELPER FUNCTIONS ----------------
+
 def today():
+    """Returns today's date."""
     return dt.date.today()
 
 def now():
+    """Returns current date and time."""
     return dt.datetime.now()
 
-def time_to_str(t: dt.time) -> str:
-    return t.strftime("%H:%M")
-
 def parse_time_str(s: str) -> dt.time:
+    """
+    Converts a HH:MM string into a time object.
+    If parsing fails, returns the current time safely.
+    """
     try:
-        hh, mm = map(int, s.split(":"))
-        return dt.time(hh, mm)
-    except Exception:
+        h, m = map(int, s.split(":"))
+        return dt.time(h, m)
+    except:
         return dt.datetime.now().time().replace(second=0, microsecond=0)
 
-def default_time_for_index(i: int) -> dt.time:
-    hour = max(0, min(23, 8 + 4 * i))
-    return dt.time(hour, 0)
-
 def get_history_entry(name, dose_time, date):
+    """
+    Retrieves a specific history record for a medicine dose on a given date.
+    """
     for h in st.session_state.history:
         if h["date"] == date and h["name"] == name and h["dose_time"] == dose_time:
             return h
     return None
 
 def ensure_history_entry(name, dose_time, date):
+    """
+    Ensures a history record exists for today's dose.
+    This allows missed doses to be detected automatically.
+    """
     if get_history_entry(name, dose_time, date) is None:
         st.session_state.history.append({
             "date": date,
@@ -54,78 +64,64 @@ def ensure_history_entry(name, dose_time, date):
             "taken": False
         })
 
-def set_taken(name, dose_time, date, val: bool):
+def set_taken(name, dose_time, date, val):
+    """
+    Marks a specific dose as taken or not taken.
+    """
     h = get_history_entry(name, dose_time, date)
-    if h is None:
+    if h:
+        h["taken"] = val
+    else:
         st.session_state.history.append({
             "date": date,
             "name": name,
             "dose_time": dose_time,
-            "taken": bool(val)
+            "taken": val
         })
-    else:
-        h["taken"] = bool(val)
 
 def get_taken(name, dose_time, date):
+    """
+    Returns True if the dose has been taken, otherwise False.
+    """
     h = get_history_entry(name, dose_time, date)
-    return bool(h["taken"]) if h else False
+    return h["taken"] if h else False
 
 def status_for_dose(dose_time_str, taken, now_dt):
+    """
+    Determines the current status of a dose:
+    - taken: already marked as taken
+    - upcoming: scheduled for later today
+    - missed: scheduled time has passed and not taken
+    """
     if taken:
         return "taken"
+
     med_time = parse_time_str(dose_time_str)
     med_dt = dt.datetime.combine(now_dt.date(), med_time)
+
     return "upcoming" if med_dt > now_dt else "missed"
 
 def adherence_score(history, days=7):
-    if not history:
-        return 0.0
+    """
+    Calculates adherence percentage over the last 7 days.
+    Adherence = (taken doses / scheduled doses) * 100
+    """
     cutoff = today() - dt.timedelta(days=days - 1)
     recent = [h for h in history if h["date"] >= cutoff]
+
     if not recent:
         return 0.0
-    total = len(recent)
+
     taken = sum(1 for h in recent if h["taken"])
-    return round(100.0 * taken / max(total, 1), 1)
+    return round(100 * taken / len(recent), 1)
 
-def update_streak(history):
-    s = 0
-    day = today()
-    while True:
-        entries = [h for h in history if h["date"] == day]
-        if not entries:
-            break
-        total = len(entries)
-        taken = sum(1 for h in entries if h["taken"])
-        if total > 0 and taken == total:
-            s += 1
-            day -= dt.timedelta(days=1)
-        else:
-            break
-    return s
+# Turtle graphics are used as positive reinforcement.
+# When adherence is high, a friendly turtle face is drawn
 
-def generate_beep_wav(seconds=0.6, freq=880):
-    framerate = 44100
-    nframes = int(seconds * framerate)
-    buf = BytesIO()
-    with wave.open(buf, 'wb') as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(framerate)
-        for i in range(nframes):
-            val = int(32767.0 * math.sin(2 * math.pi * freq * (i / framerate)))
-            w.writeframes(struct.pack('<h', val))
-    buf.seek(0)
-    return buf
-
-# ---------------- TURTLE REWARD ----------------
-def show_turtle_reward():
-    """
-    Draws a simple turtle smiley as positive reinforcement.
-    """
+def draw_turtle_reward():
     screen = turtle.Screen()
+    screen.setup(400, 400)
     screen.title("Great Job! 🐢")
-    screen.setup(350, 350)
 
     t = turtle.Turtle()
     t.hideturtle()
@@ -133,267 +129,131 @@ def show_turtle_reward():
     t.pensize(3)
     t.color("green")
 
-    # Face
+    # Turtle face
     t.penup()
-    t.goto(0, -40)
+    t.goto(0, -20)
     t.pendown()
     t.circle(80)
 
     # Eyes
-    for x in (-30, 30):
+    for x in [-30, 30]:
         t.penup()
-        t.goto(x, 20)
+        t.goto(x, 40)
         t.pendown()
         t.dot(10)
 
     # Smile
     t.penup()
-    t.goto(-35, 0)
+    t.goto(-35, 10)
     t.setheading(-60)
     t.pendown()
     t.circle(40, 120)
 
     screen.exitonclick()
 
-# ---------------- PDF REPORT ----------------
-def build_report_pdf_bytes(history, meds_today):
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
+# Generates a short audio beep to confirm a dose is marked as taken
 
-        buf = BytesIO()
-        c = canvas.Canvas(buf, pagesize=A4)
+def generate_beep_wav(seconds=0.4, freq=880):
+    framerate = 44100
+    nframes = int(seconds * framerate)
+    buf = BytesIO()
 
-        w, h = A4
-        y = h - 60
+    with wave.open(buf, 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(framerate)
 
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(60, y, "MedTimer – Weekly Adherence Report")
-        y -= 28
+        for i in range(nframes):
+            val = int(32767 * math.sin(2 * math.pi * freq * (i / framerate)))
+            w.writeframes(struct.pack('<h', val))
 
-        c.setFont("Helvetica", 10)
-        c.drawString(60, y, datetime.now().strftime("Generated: %Y-%m-%d %H:%M"))
-        y -= 18
+    buf.seek(0)
+    return buf
 
-        score = adherence_score(history, 7)
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(60, y, f"7-Day Adherence: {score}%")
-        y -= 18
-
-        cutoff = today() - dt.timedelta(days=6)
-
-        for i in range(7):
-            d = cutoff + dt.timedelta(days=i)
-            entries = [h for h in history if h["date"] == d]
-            total = len(entries)
-            taken = sum(1 for h in entries if h["taken"])
-            c.setFont("Helvetica", 10)
-            c.drawString(60, y, f"{d}: {taken}/{total} doses taken")
-            y -= 14
-            if y < 80:
-                c.showPage()
-                y = h - 60
-
-        y -= 6
-        c.setFont("Helvetica-Bold", 12)
-        c.drawString(60, y, "Today's Scheduled Doses:")
-        y -= 16
-
-        for m in meds_today:
-            c.setFont("Helvetica", 10)
-            c.drawString(60, y, f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}")
-            y -= 12
-            if y < 80:
-                c.showPage()
-                y = h - 60
-
-        c.save()
-        buf.seek(0)
-        return buf.getvalue()
-    except Exception:
-        return b""
-
-# ---------------- USER INTERFACE ----------------
 st.title("MedTimer")
-col1, col2, col3 = st.columns([2, 1, 1])
-with col1:
-    st.markdown("### Today")
-with col2:
-    st.metric("7-Day Adherence", f"{adherence_score(st.session_state.history,7)}%")
-with col3:
-    st.metric("Perfect Streak", f"{update_streak(st.session_state.history)} days")
 
-# ---------------- CHECKLIST ----------------
+# Display weekly adherence score
+score = adherence_score(st.session_state.history)
+st.metric("7-Day Adherence", f"{score}%")
+
+# Show reward if adherence is high
+if score >= 75:
+    st.success("🏆 Excellent adherence!")
+    if st.button("Show Reward 🐢"):
+        draw_turtle_reward()
+
 st.header("Today's Checklist")
+
 today_date = today()
 now_dt = now()
 weekday = WEEKDAYS[today_date.weekday()]
-scheduled_today = []
 
+# Display medicines scheduled for today
 if st.session_state.meds:
     for name, info in st.session_state.meds.items():
         if weekday not in info.get("days", WEEKDAYS):
             continue
 
-        st.write(f"**{name}** — {info.get('note') or 'No note'}")
-        doses_sorted = sorted(info.get("doses", []), key=lambda s: parse_time_str(s))
-        for dose in doses_sorted:
+        st.subheader(name)
+
+        for dose in sorted(info.get("doses", [])):
             ensure_history_entry(name, dose, today_date)
             taken = get_taken(name, dose, today_date)
             status = status_for_dose(dose, taken, now_dt)
-            c1, c2, c3 = st.columns([2.2,1.2,1.2])
 
-            with c1:
-                st.write(f"⏰ {dose}")
-            with c2:
-                if status == "taken":
-                    st.success("Taken")
-                elif status == "upcoming":
-                    st.warning("Upcoming")
-                else:
-                    st.error("Missed")
-            with c3:
-                btn_key = f"btn_{name}_{dose}_{today_date}_{'taken' if taken else 'untaken'}"
-                if taken:
-                    if st.button("Undo", key=btn_key):
-                        set_taken(name, dose, today_date, False)
-                        st.rerun()
-                else:
-                    if st.button("Mark taken", key=btn_key):
-                        set_taken(name, dose, today_date, True)
-                        st.audio(generate_beep_wav(), format="audio/wav")
-                        st.rerun()
-            scheduled_today.append({"name": name,"dose_time": dose,"taken": get_taken(name, dose, today_date)})
-        st.divider()
-else:
-    st.info("No medicines yet. Use Add/Edit section.")
+            # Three-column layout: time, status, action
+            c1, c2, c3 = st.columns(3)
+            c1.write(f"⏰ {dose}")
 
-# ---------------- ADD / EDIT MEDICINES ----------------
-st.header("Add / Edit Medicines")
-mode = st.radio("Mode", ["Add","Edit"])
-preset_meds = ["Paracetamol","Aspirin","Ibuprofen","Amoxicillin","Vitamin D","Iron","Zinc",
-               "Cough Syrup","Metformin","Atorvastatin","Omeprazole","Azithromycin","Cetirizine",
-               "Salbutamol","Levothyroxine","Prednisone","Simvastatin","Furosemide","Losartan","Hydrochlorothiazide"]
-
-if mode=="Add":
-    med_choice = st.selectbox("Select medicine or Custom", ["Custom"]+preset_meds)
-    if med_choice=="Custom":
-        name=st.text_input("Enter medicine name")
-    else:
-        name=med_choice
-        st.caption(f"Preset medicine: {name}")
-    note=st.text_input("Note")
-    freq=st.number_input("Times per day",1,10,1)
-    new_times=[]
-    for i in range(freq):
-        tm=st.time_input(f"Dose {i+1}", value=datetime.strptime("08:00","%H:%M").time(),key=f"add_time_{i}")
-        new_times.append(tm.strftime("%H:%M"))
-    st.write("Repeat on days:")
-    day_cols=st.columns(7)
-    selected_days=[]
-    for i,d in enumerate(WEEKDAYS):
-        if day_cols[i].checkbox(d,True,key=f"add_day_{d}"):
-            selected_days.append(d)
-    if st.button("Add"):
-        if not name.strip():
-            st.warning("Enter a name.")
-        elif name in st.session_state.meds:
-            st.warning("Medicine exists. Use Edit.")
-        else:
-            st.session_state.meds[name]={"doses":new_times,"note":note,"days":selected_days or WEEKDAYS}
-            st.success(f"Added {name}")
-            st.rerun()
-else:
-    meds=list(st.session_state.meds.keys())
-    if meds:
-        target=st.selectbox("Select medicine",meds)
-        info=st.session_state.meds[target]
-        new_name=st.text_input("Name",target)
-        new_note=st.text_input("Note",info.get("note",""))
-        freq=st.number_input("Times per day",1,10,value=len(info.get("doses",[])))
-        new_times=[]
-        for i in range(freq):
-            default=info["doses"][i] if i<len(info["doses"]) else "08:00"
-            tm=st.time_input(f"Dose {i+1}",value=datetime.strptime(default,"%H:%M").time(),key=f"edit_time_{i}")
-            new_times.append(tm.strftime("%H:%M"))
-        st.write("Repeat on days:")
-        cols=st.columns(7)
-        new_days=[]
-        for i,d in enumerate(WEEKDAYS):
-            if cols[i].checkbox(d,d in info.get("days",WEEKDAYS),key=f"edit_day_{d}"):
-                new_days.append(d)
-        if st.button("Save changes"):
-            if new_name != target and new_name in st.session_state.meds:
-                st.warning("Another medicine already has that name.")
+            if status == "taken":
+                c2.success("Taken")
+            elif status == "upcoming":
+                c2.warning("Upcoming")
             else:
-                if new_name != target:
-                    for h in st.session_state.history:
-                        if h["name"]==target:
-                            h["name"]=new_name
-                    st.session_state.meds.pop(target)
-                st.session_state.meds[new_name]={"doses":new_times,"note":new_note,"days":new_days or WEEKDAYS}
-                st.success("Saved")
-                st.rerun()
-        if st.button("Delete Medicine",key=f"delete_{target}"):
-            del st.session_state.meds[target]
-            st.session_state.history=[h for h in st.session_state.history if h["name"]!=target]
-            st.success(f"Deleted {target}")
-            st.rerun()
-    else:
-        st.info("No medicines available. Switch to Add mode.")
+                c2.error("Missed")
 
-# ---------------- ADHERENCE FEEDBACK ----------------
-st.header("Your Daily Well-Being Check 😊")
-score=adherence_score(st.session_state.history,7)
-if score==0:
-    st.info("🌿 Let's begin today with a small step. Your health matters, one dose at a time.")
-elif score<=25:
-    st.warning("☹️ Your health buddy is a bit concerned.\n\n“Even small progress is still progress.”")
-elif score<=50:
-    st.warning("😐 You're getting there.\n\n“Staying consistent makes tomorrow easier.”")
-elif score<=75:
-    st.success("🙂 Good work!\n\n“Every dose you take is a gift to your future self.”")
+            # Mark dose as taken
+            if not taken:
+                if c3.button("Mark taken", key=f"{name}_{dose}"):
+                    set_taken(name, dose, today_date, True)
+                    st.audio(generate_beep_wav(), format="audio/wav")
+                    st.rerun()
+            else:
+                c3.write("✔")
 else:
-    st.success("😊 Wonderful consistency!\n\n“Your commitment is keeping you strong every day.”")
-    if st.button("Celebrate with Turtle 🐢"):
-        show_turtle_reward()
+    st.info("No medicines added.")
 
-# ---------------- PDF EXPORT ----------------
-st.header("Export Weekly PDF")
-st.subheader("Weekly PDF Report")
-sample_schedule=[]
-td=today()
-wd=WEEKDAYS[td.weekday()]
-for name,info in st.session_state.meds.items():
-    if wd not in info.get("days",WEEKDAYS):
-        continue
-    for dose in info.get("doses",[]):
-        sample_schedule.append({"name":name,"dose_time":dose,"taken":get_taken(name,dose,td)})
+# ---------------- ADD MEDICINE ----------------
 
-pdf_bytes=build_report_pdf_bytes(st.session_state.history,sample_schedule)
-if pdf_bytes:
-    st.download_button("Download PDF",pdf_bytes,file_name="MedTimer_Report.pdf",mime="application/pdf")
-else:
-    st.info("PDF not available. Install reportlab.")
+st.header("Add Medicine")
 
-# ---------------- FOOTER ----------------
-st.markdown("---")
-cols=st.columns([2,1])
-with cols[0]:
-    st.markdown("#### Motivation of the Day")
-    tips=[
-        "Taking medicines on time is a vote for your future self.",
-        "Small habits, big impact—consistency builds confidence.",
-        "You’re not alone—set gentle reminders and celebrate wins.",
-        "Celebrate every day you complete your doses."
-    ]
-    st.info(tips[dt.datetime.now().day % len(tips)])
-with cols[1]:
-    st.markdown("#### Data")
-    if st.button("Reset all data"):
-        st.session_state.meds={}
-        st.session_state.history=[]
-        st.session_state.streak=0
-        st.success("All data cleared")
+name = st.text_input("Medicine name")
+times = st.number_input("Times per day", 1, 5, 1)
+
+dose_times = []
+for i in range(times):
+    t = st.time_input(f"Dose {i+1}", datetime.strptime("08:00", "%H:%M").time())
+    dose_times.append(t.strftime("%H:%M"))
+
+days = st.multiselect("Days", WEEKDAYS, default=WEEKDAYS)
+
+if st.button("Add Medicine"):
+    if name.strip():
+        st.session_state.meds[name] = {
+            "doses": dose_times,
+            "days": days or WEEKDAYS
+        }
+        st.success("Medicine added")
         st.rerun()
+    else:
+        st.warning("Enter medicine name")
 
+st.markdown("---")
+st.info("💙 Consistency today builds a healthier tomorrow.")
+
+# Reset all stored data
+if st.button("Reset all data"):
+    st.session_state.meds = {}
+    st.session_state.history = []
+    st.success("Data cleared")
+    st.rerun()
