@@ -3,7 +3,7 @@ import datetime as dt
 from datetime import datetime
 from io import BytesIO
 import math, wave, struct
-import turtle
+import turtle 
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
@@ -11,6 +11,7 @@ st.autorefresh(interval=60000, key="auto_refresh")
 
 # meds stores all medicines added by the user
 # Structure: Medicine Name, "doses,days
+
 if "meds" not in st.session_state or not isinstance(st.session_state.meds, dict):
     st.session_state.meds = {}
 
