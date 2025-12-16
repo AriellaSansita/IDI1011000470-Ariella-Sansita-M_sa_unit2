@@ -7,7 +7,8 @@ import turtle
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
-st.autorefresh(interval=60000, key="auto_refresh")
+# Removed st.autorefresh as it is not a standard Streamlit function.
+# If auto-refresh is needed, consider using st.rerun() in a loop or a custom timer, but it's not implemented here.
 
 # meds stores all medicines added by the user
 # Structure: Medicine Name, "doses,days
@@ -118,6 +119,8 @@ def adherence_score(history, days=7):
 
 # Turtle graphics are used as positive reinforcement.
 # When adherence is high, a friendly turtle face is drawn
+# Note: Turtle may not work properly in web-based Streamlit deployments (e.g., Streamlit Cloud),
+# as it requires a local GUI window. For web apps, consider replacing with a static image or animation.
 
 def draw_turtle_reward():
     screen = turtle.Screen()
@@ -258,3 +261,4 @@ if st.button("Reset all data"):
     st.session_state.history = []
     st.success("Data cleared")
     st.rerun()
+
