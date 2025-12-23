@@ -29,7 +29,7 @@ def today():
     return dt.date.today()
 
 # Returns current system date and time
-def today():
+def now():
     return dt.datetime.now()
 
 # Converts a time object to HH:MM string
