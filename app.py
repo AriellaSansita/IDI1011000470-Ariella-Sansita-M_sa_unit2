@@ -106,6 +106,8 @@ def build_report_pdf_bytes(history, meds_today):
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
+        from io import BytesIO
+        from datetime import datetime
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         w, h = A4
@@ -119,31 +121,21 @@ def build_report_pdf_bytes(history, meds_today):
         score = adherence_score(history, 7)
         c.setFont("Helvetica-Bold", 12)
         c.drawString(60, y, f"7-Day Adherence: {score}%")
-        y -= 18
-        cutoff = today() - dt.timedelta(days=6)
-
-        for i in range(7):
-            d = cutoff + dt.timedelta(days=i)
-            entries = [h for h in history if h["date"] == d]
-            total = len(entries)
-            taken = sum(1 for h in entries if h["taken"])
-
-            c.setFont("Helvetica", 10)
-            c.drawString(60, y, f"{d}: {taken}/{total} doses taken")
-            y -= 14
-
-            if y < 80:
-                c.showPage()
-                y = h - 60
-
-        y -= 6
+        y -= 24
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(60, y, "Today's Scheduled Doses:")
+        c.drawString(
+            60,
+            y,
+            f"Scheduled Doses for {datetime.now().strftime('%A, %d %B %Y')}:"
+        )
         y -= 16
-
         for m in meds_today:
             c.setFont("Helvetica", 10)
-            c.drawString(60, y, f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}")
+            c.drawString(
+                60,
+                y,
+                f"- {m['name']} @ {m['dose_time']} | taken: {m['taken']}"
+            )
             y -= 12
 
             if y < 80:
