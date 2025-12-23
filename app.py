@@ -1,6 +1,7 @@
 import streamlit as st
 import datetime as dt
 from io import BytesIO
+import turtle
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
@@ -376,3 +377,98 @@ with cols[1]:
         st.session_state.history = []
         st.success("All data cleared")
         st.rerun()
+
+screen = turtle.Screen()
+screen.title("MedTimer – Emoji Feedback")
+screen.bgcolor("#fffde7")
+
+t = turtle.Turtle()
+t.hideturtle()
+t.speed(0)
+t.width(4)
+t.color("black")
+
+def move(x, y):
+    t.penup()
+    t.goto(x, y)
+    t.pendown()
+
+def face(x, y, r=65):
+    move(x, y - r)
+    t.color("black", "#ffee58")
+    t.begin_fill()
+    t.circle(r)
+    t.end_fill()
+    t.color("black")
+
+def eye_dot(x, y, r=5):
+    move(x, y - r)
+    t.begin_fill()
+    t.circle(r)
+    t.end_fill()
+
+def eye_line(x, y, length=16):
+    move(x - length/2, y)
+    t.setheading(0)
+    t.forward(length)
+
+def sad_mouth(x, y):
+    move(x - 40, y - 15)
+    t.setheading(480)
+    t.circle(40, 120)
+
+def neutral_mouth(x, y):
+    move(x - 25, y - 10)
+    t.setheading(0)
+    t.forward(50)
+
+def kiss_mouth(x, y):
+    move(x, y - 20)
+    t.circle(8)
+
+def smile_mouth(x, y):
+    move(x - 30, y - 15)
+    t.setheading(-60)
+    t.circle(40, 120)
+
+def label(txt, x, y):
+    move(x, y)
+    t.write(txt, align="center", font=("Arial", 12, "bold"))
+
+def emoji_sad(x, y):
+    face(x, y)
+    eye_dot(x - 20, y + 22)
+    eye_dot(x + 20, y + 22)
+    sad_mouth(x+75, y-15)
+
+def emoji_neutral(x, y):
+    face(x-55, y+105)
+    eye_line(x - 20, y + 25)
+    eye_line(x + 20, y + 25)
+    neutral_mouth(x, y)
+
+def emoji_good(x, y):
+    face(x, y)
+    eye_dot(x - 20, y + 22)
+    eye_dot(x + 20, y + 22)
+    kiss_mouth(x, y)
+
+def emoji_happy(x, y):
+    face(x, y)
+    eye_dot(x - 22, y + 25)
+    eye_dot(x + 22, y + 25)
+    smile_mouth(x, y)
+
+emoji_sad(-240, 80)
+label("Low adherence", -240, -40)
+
+emoji_neutral(-80, 80)
+label("Getting there", -80, -40)
+
+emoji_good(80, 80)
+label("Good progress", 80, -40)
+
+emoji_happy(240, 80)
+label("Excellent consistency", 240, -40)
+
+turtle.done()
