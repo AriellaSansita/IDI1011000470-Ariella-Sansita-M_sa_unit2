@@ -1,8 +1,6 @@
 import streamlit as st
 import datetime as dt
-from datetime import datetime
 from io import BytesIO
-import math, wave, struct
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
@@ -11,9 +9,6 @@ if "meds" not in st.session_state or not isinstance(st.session_state.meds, dict)
 
 if "history" not in st.session_state:
     st.session_state.history = []    
-
-if "streak" not in st.session_state:
-    st.session_state.streak = 0     
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -68,12 +63,10 @@ def get_taken(name, dose_time, date):
     h = get_history_entry(name, dose_time, date)
     return bool(h["taken"]) if h else False
 
-from dateutil import parser
-
 def parse_hhmm(time_str: str) -> dt.datetime:
     """Convert HH:MM string to a full datetime object for today."""
     today_date = dt.date.today()
-    t = parser.parse(time_str).time()  # safely parses 24h or 12h
+    t = dt.datetime.strptime(time_str, "%H:%M").time()
     return dt.datetime.combine(today_date, t)
 
 def now_local() -> dt.datetime:
@@ -117,8 +110,6 @@ def build_report_pdf_bytes(history, meds_today):
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
-        from io import BytesIO
-        from datetime import datetime
         buf = BytesIO()
         c = canvas.Canvas(buf, pagesize=A4)
         w, h = A4
@@ -127,7 +118,7 @@ def build_report_pdf_bytes(history, meds_today):
         c.drawString(60, y, "MedTimer – Weekly Adherence Report")
         y -= 28
         c.setFont("Helvetica", 10)
-        c.drawString(60, y, datetime.now().strftime("Generated: %Y-%m-%d %H:%M"))
+        c.drawString(60, y, dt.datetime.now().strftime("Generated: %Y-%m-%d %H:%M"))
         y -= 18
         score = adherence_score(history, 7)
         c.setFont("Helvetica-Bold", 12)
@@ -137,7 +128,7 @@ def build_report_pdf_bytes(history, meds_today):
         c.drawString(
             60,
             y,
-            f"Scheduled Doses for {datetime.now().strftime('%A, %d %B %Y')}:"
+            f"Scheduled Doses for {dt.datetime.now().strftime('%A, %d %B %Y')}:"
         )
         y -= 16
         for m in meds_today:
@@ -250,7 +241,7 @@ if mode == "Add":
     for i in range(freq):
         tm = st.time_input(
             f"Dose {i+1}",
-            value=datetime.strptime("08:00","%H:%M").time(),
+            value=dt.datetime.strptime("08:00","%H:%M").time(),
             key=f"add_time_{i}"
         )
         new_times.append(tm.strftime("%H:%M"))
@@ -289,7 +280,7 @@ else:
             default = info["doses"][i] if i < len(info["doses"]) else "08:00"
             tm = st.time_input(
                 f"Dose {i+1}",
-                value=datetime.strptime(default,"%H:%M").time(),
+                value=dt.datetime.strptime(default,"%H:%M").time(),
                 key=f"edit_time_{i}"
             )
             new_times.append(tm.strftime("%H:%M"))
@@ -383,6 +374,5 @@ with cols[1]:
     if st.button("Reset all data"):
         st.session_state.meds = {}
         st.session_state.history = []
-        st.session_state.streak = 0
         st.success("All data cleared")
         st.rerun()
