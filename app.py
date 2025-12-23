@@ -4,11 +4,6 @@ from io import BytesIO
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
-import zoneinfo
-timezones = ["Asia/Kolkata", "UTC", "America/New_York", "Europe/London"]
-user_tz = st.selectbox("Select your timezone", timezones, index=0)
-tz = zoneinfo.ZoneInfo(user_tz)
-
 if "meds" not in st.session_state or not isinstance(st.session_state.meds, dict):
     st.session_state.meds = {}    
 
@@ -21,7 +16,7 @@ def today():
     return dt.date.today()
 
 def now():
-    return dnow_local().replace(second=0, microsecond=0)
+    return dt.datetime.now().replace(second=0, microsecond=0)
 
 def time_to_str(t: dt.time) -> str:
     return t.strftime("%H:%M")
@@ -31,7 +26,7 @@ def parse_time_str(s: str) -> dt.time:
         hh, mm = map(int, s.split(":"))
         return dt.time(hh, mm)
     except Exception:
-        return now_local().time().replace(second=0, microsecond=0)
+        return dt.datetime.now().time().replace(second=0, microsecond=0)
 
 def default_time_for_index(i: int) -> dt.time:
     hour = max(0, min(23, 8 + 4 * i))
@@ -76,7 +71,7 @@ def parse_hhmm(time_str: str) -> dt.datetime:
 
 def now_local() -> dt.datetime:
     """Current local datetime"""
-    return now_local()
+    return dt.datetime.now()
 
 def status_for_dose_fixed(dose_time_str, taken):
     if taken:
@@ -123,7 +118,7 @@ def build_report_pdf_bytes(history, meds_today):
         c.drawString(60, y, "MedTimer – Weekly Adherence Report")
         y -= 28
         c.setFont("Helvetica", 10)
-        c.drawString(60, y, now_local().strftime("Generated: %Y-%m-%d %H:%M"))
+        c.drawString(60, y, dt.datetime.now().strftime("Generated: %Y-%m-%d %H:%M"))
         y -= 18
         score = adherence_score(history, 7)
         c.setFont("Helvetica-Bold", 12)
@@ -133,7 +128,7 @@ def build_report_pdf_bytes(history, meds_today):
         c.drawString(
             60,
             y,
-            f"Scheduled Doses for {now_local().strftime('%A, %d %B %Y')}:"
+            f"Scheduled Doses for {dt.datetime.now().strftime('%A, %d %B %Y')}:"
         )
         y -= 16
         for m in meds_today:
@@ -157,10 +152,6 @@ def build_report_pdf_bytes(history, meds_today):
         return b""
 
 st.title("MedTimer")
-
-current_dt = now_local().strftime("%A, %d %B %Y • %H:%M")
-st.caption(f" {current_dt}")
-
 col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     st.markdown("### Today")
@@ -376,7 +367,7 @@ with cols[0]:
         "You’re not alone—set gentle reminders and celebrate wins.",
         "Celebrate every day you complete your doses."
     ]
-    st.info(tips[now_local().day % len(tips)])
+    st.info(tips[dt.datetime.now().day % len(tips)])
 
 with cols[1]:
     st.markdown("#### Data")
