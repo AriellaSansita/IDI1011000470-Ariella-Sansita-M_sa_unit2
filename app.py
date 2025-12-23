@@ -321,7 +321,7 @@ st.header("Your Daily Well-Being Check 😊")
 score = adherence_score(st.session_state.history, 7)
 
 if score == 0:
-    st.info("🌿 Let's begin today with a small step. Your health matters, one dose at a time.")
+    st.info("☹️ Let's begin today with a small step. Your health matters, one dose at a time.")
 elif score <= 25:
     st.warning("☹️ Your health buddy is a bit concerned.\n\n“Even small progress is still progress.”")
 elif score <= 50:
@@ -329,7 +329,7 @@ elif score <= 50:
 elif score <= 75:
     st.success("🙂 Good work!\n\n“Every dose you take is a gift to your future self.”")
 else:
-    st.success("😊 Wonderful consistency!\n\n“Your commitment is keeping you strong every day.”")
+    st.success("🙂 Wonderful consistency!\n\n“Your commitment is keeping you strong every day.”")
 
 st.header("Export Weekly PDF")
 st.subheader("Weekly PDF Report")
