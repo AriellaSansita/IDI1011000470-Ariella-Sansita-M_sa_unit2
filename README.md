@@ -53,6 +53,10 @@ MedTimer is a Python-based interactive daily medicine companion designed to supp
 
 The app was deployed on Streamlit Cloud by connecting the GitHub repository, selecting app.py as the main entry file, and installing dependencies from requirements.txt. Streamlit automatically built and hosted the application online.
 
+## Turtle graphics could not be displayed in the deployed Streamlit. Therefore, emojis were used for encouragement is shown in the screenshots. The Turtle code is included in FILE to show the intended design. 
+<img width="677" height="262" alt="Screenshot 2025-12-23 at 9 17 39 PM" src="https://github.com/user-attachments/assets/4ddb6c9c-1f5a-41a5-8858-d6bd5db1dae3" />
+
+
 
 ## Live App Link
 https://idi1011000470-ariella-sansita-msaunit2-tvk2l34ju2brshjnfn2fjo.streamlit.app/
