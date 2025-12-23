@@ -283,7 +283,7 @@ else:
     else:
         st.info("No medicines available. Switch to Add mode.")
         
-st.header("Your Daily Well-Being Check 😊")
+st.header("Your Daily Well-Being Check")
 score = adherence_score(st.session_state.history, 7)
 
 if score == 0:
