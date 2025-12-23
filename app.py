@@ -1,6 +1,7 @@
 import streamlit as st
 import datetime as dt
 from io import BytesIO
+import time  # Added for auto-refresh functionality
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
@@ -162,6 +163,9 @@ with col3:
 
 st.header("Today's Checklist")
 
+# Add auto-refresh option
+auto_refresh = st.checkbox("Auto-refresh status every 60 seconds", value=True)
+
 today_date = today()
 weekday = WEEKDAYS[today_date.weekday()]
 scheduled_today = []
@@ -215,6 +219,11 @@ if st.session_state.meds:
         st.divider()
 else:
     st.info("No medicines yet. Use Add/Edit section.")
+
+# Auto-refresh logic: if enabled, wait 60 seconds and rerun
+if auto_refresh:
+    time.sleep(60)
+    st.rerun()
 
 st.header("Add / Edit Medicines")
 mode = st.radio("Mode", ["Add", "Edit"])
