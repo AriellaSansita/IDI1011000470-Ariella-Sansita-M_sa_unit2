@@ -127,7 +127,6 @@ col2.metric("7-Day Adherence", f"{adherence_score(st.session_state.history)}%")
 col3.metric("Perfect Streak", f"{update_streak(st.session_state.history)} days")
 
 st.header("Today's Checklist")
-st.header("Today's Checklist")
 
 today_date = today()
 weekday = WEEKDAYS[today_date.weekday()]
