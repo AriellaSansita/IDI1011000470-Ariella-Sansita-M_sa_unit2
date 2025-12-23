@@ -146,7 +146,7 @@ if st.session_state.meds:
             ensure_history_entry(name, dose, today_date)
 
             taken = get_taken(name, dose, today_date)
-            status = status_for_dose_fixed(dose, taken)
+            status = status_for_dose(dose, taken)
 
             c1, c2, c3 = st.columns([2.2, 1.2, 1.2])
 
