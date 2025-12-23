@@ -38,12 +38,8 @@ def time_to_str(t: dt.time) -> str:
 
 # Converts HH:MM string into time object
 def parse_time_str(s: str) -> dt.time:
-    try:
-        hh, mm = map(int, s.split(":"))
-        return dt.time(hh, mm)
-    except Exception:
-        # Fallback to current time if input is invalid
-        return dt.datetime.now().time().replace(second=0, microsecond=0)
+    hh, mm = map(int, s.split(":"))
+    return dt.time(hh, mm)
 
 # Generates default reminder times
 def default_time_for_index(i: int) -> dt.time:
