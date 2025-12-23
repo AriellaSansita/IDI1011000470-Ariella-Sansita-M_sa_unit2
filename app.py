@@ -163,8 +163,10 @@ with col3:
 
 st.header("Today's Checklist")
 
-# Add auto-refresh option
-auto_refresh = st.checkbox("Auto-refresh status every 60 seconds", value=True)
+# Add auto-refresh option with shorter interval
+auto_refresh = st.checkbox("Auto-refresh status every 30 seconds", value=True)
+if auto_refresh:
+    st.info("Status will auto-refresh every 30 seconds to check for missed doses.")
 
 today_date = today()
 weekday = WEEKDAYS[today_date.weekday()]
@@ -220,9 +222,9 @@ if st.session_state.meds:
 else:
     st.info("No medicines yet. Use Add/Edit section.")
 
-# Auto-refresh logic: if enabled, wait 60 seconds and rerun
+# Auto-refresh logic: if enabled, wait 30 seconds and rerun
 if auto_refresh:
-    time.sleep(60)
+    time.sleep(30)
     st.rerun()
 
 st.header("Add / Edit Medicines")
