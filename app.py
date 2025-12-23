@@ -21,7 +21,7 @@ def today():
     return dt.date.today()
 
 def now():
-    return dt.datetime.now()
+    return dt.datetime.now().replace(second=0, microsecond=0)
 
 def time_to_str(t: dt.time) -> str:
     return t.strftime("%H:%M")
@@ -68,12 +68,23 @@ def get_taken(name, dose_time, date):
     h = get_history_entry(name, dose_time, date)
     return bool(h["taken"]) if h else False
 
-def status_for_dose(dose_time_str, taken, now_dt):
+from dateutil import parser
+
+def parse_hhmm(time_str: str) -> dt.datetime:
+    """Convert HH:MM string to a full datetime object for today."""
+    today_date = dt.date.today()
+    t = parser.parse(time_str).time()  # safely parses 24h or 12h
+    return dt.datetime.combine(today_date, t)
+
+def now_local() -> dt.datetime:
+    """Current local datetime"""
+    return dt.datetime.now()
+
+def status_for_dose_fixed(dose_time_str, taken):
     if taken:
         return "taken"
-    med_time = parse_time_str(dose_time_str)
-    med_dt = dt.datetime.combine(now_dt.date(), med_time)
-    return "upcoming" if med_dt > now_dt else "missed"
+    target_dt = parse_hhmm(dose_time_str)
+    return "upcoming" if now_local() < target_dt else "missed"
 
 def adherence_score(history, days=7):
     if not history:
