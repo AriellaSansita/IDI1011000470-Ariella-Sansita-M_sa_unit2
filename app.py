@@ -29,8 +29,8 @@ def today():
     return dt.date.today()
 
 # Returns current system date and time
-def now():
-    return dt.datetime.now()
+def today():
+    return dt.datetime.now(ZoneInfo("Asia/Kolkata")).date()
 
 # Converts a time object to HH:MM string
 def time_to_str(t: dt.time) -> str:
