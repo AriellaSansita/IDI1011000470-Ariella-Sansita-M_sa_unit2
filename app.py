@@ -152,6 +152,10 @@ def build_report_pdf_bytes(history, meds_today):
         return b""
 
 st.title("MedTimer")
+
+current_dt = dt.datetime.now().strftime("%A, %d %B %Y • %H:%M")
+st.caption(f" {current_dt}")
+
 col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     st.markdown("### Today")
