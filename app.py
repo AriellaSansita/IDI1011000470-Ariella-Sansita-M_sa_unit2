@@ -172,7 +172,6 @@ with col3:
 st.header("Today's Checklist")
 
 today_date = today()
-now_dt = now()
 weekday = WEEKDAYS[today_date.weekday()]
 scheduled_today = []
 
@@ -190,7 +189,7 @@ if st.session_state.meds:
             ensure_history_entry(name, dose, today_date)
 
             taken = get_taken(name, dose, today_date)
-            status = status_for_dose(dose, taken, now_dt)
+            status = status_for_dose_fixed(dose, taken)
 
             c1, c2, c3 = st.columns([2.2, 1.2, 1.2])
 
