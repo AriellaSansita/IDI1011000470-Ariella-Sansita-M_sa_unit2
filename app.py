@@ -119,7 +119,7 @@ def build_report_pdf_bytes(history, meds_today):
 
 # ------------------ UI ------------------
 st.title("MedTimer")
-st.caption(f"📅 {now_local().strftime('%A, %d %B %Y • %H:%M')}")
+st.caption(f" {now_local().strftime('%A, %d %B %Y • %H:%M')}")
 
 col1, col2, col3 = st.columns(3)
 col1.markdown("### Today")
