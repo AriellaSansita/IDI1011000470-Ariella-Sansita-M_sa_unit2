@@ -64,7 +64,7 @@ def get_taken(name, dose_time, date):
     h = get_history_entry(name, dose_time, date)
     return bool(h["taken"]) if h else False
 
-# ✅ FIXED TIME LOGIC
+# ================= ✅ FIXED TIME LOGIC =================
 def status_for_dose(dose_time_str, taken, now_dt):
     if taken:
         return "taken"
@@ -104,7 +104,7 @@ def update_streak(history):
 # ================= UI =================
 st.title("MedTimer")
 
-col1, col2, col3 = st.columns([2,1,1])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     st.markdown("### Today")
 with col2:
@@ -112,6 +112,7 @@ with col2:
 with col3:
     st.metric("Perfect Streak", f"{update_streak(st.session_state.history)} days")
 
+# ================= TODAY'S CHECKLIST =================
 st.header("Today's Checklist")
 
 today_date = today()
@@ -131,7 +132,7 @@ if st.session_state.meds:
             taken = get_taken(name, dose, today_date)
             status = status_for_dose(dose, taken, now_dt)
 
-            c1, c2, c3 = st.columns([2.2,1.2,1.2])
+            c1, c2, c3 = st.columns([2.2, 1.2, 1.2])
             with c1:
                 st.write(f"⏰ {dose}")
             with c2:
@@ -153,7 +154,7 @@ if st.session_state.meds:
                         st.rerun()
         st.divider()
 else:
-    st.info("No medicines yet. Use Add / Edit section.")
+    st.info("No medicines yet. Use Add section below.")
 
 # ================= ADD MEDICINES =================
 st.header("Add Medicine")
@@ -164,13 +165,17 @@ freq = st.number_input("Times per day", 1, 10, 1)
 
 times = []
 for i in range(freq):
-    tm = st.time_input(f"Dose {i+1}", datetime.strptime("08:00","%H:%M").time())
+    tm = st.time_input(
+        f"Dose {i+1}",
+        value=datetime.strptime("08:00", "%H:%M").time(),
+        key=f"time_{i}"
+    )
     times.append(tm.strftime("%H:%M"))
 
 days = []
 cols = st.columns(7)
-for i,d in enumerate(WEEKDAYS):
-    if cols[i].checkbox(d, True):
+for i, d in enumerate(WEEKDAYS):
+    if cols[i].checkbox(d, True, key=f"day_{d}"):
         days.append(d)
 
 if st.button("Add"):
@@ -184,3 +189,7 @@ if st.button("Add"):
         st.rerun()
     else:
         st.warning("Enter a medicine name")
+
+# ================= FOOTER =================
+st.markdown("---")
+st.info("💙 Small habits today build a healthier tomorrow.")
