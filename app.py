@@ -1,7 +1,6 @@
 import streamlit as st
 import datetime as dt
 from io import BytesIO
-import turtle
 
 st.set_page_config("MedTimer", "💊", layout="wide")
 
